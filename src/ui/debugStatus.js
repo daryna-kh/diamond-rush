@@ -67,7 +67,9 @@ function getStatusLines(assets, worldId, stage, stageRoot, inspectedCell) {
     `stage ${stage.id}: ${stage.width} x ${stage.height}`,
     `stage-render-map-${worldId}.json: ${assets.stageRenderMaps[worldId].triples.length} triples`,
     `unknown cells in stage ${stage.id}: ${getUnknownCount(stageRoot)}`,
+    `spawn: ${stageRoot.spawn ? `${stageRoot.spawn.x}/${stageRoot.spawn.y} (${stageRoot.spawn.source})` : "-"}`,
   ];
+  if (stageRoot.spawn?.rule) lines.push(`spawn rule: ${stageRoot.spawn.rule}`);
 
   if (stageMetadata?.role) lines.push(`role: ${stageMetadata.role}`);
   if (stageMetadata?.label) lines.push(`label: ${stageMetadata.label}`);

@@ -1,3 +1,5 @@
+import { createPlayerSprite } from "../game/playerSprite.js";
+import { findStageSpawn } from "../game/spawnPoints.js";
 import { fitStageToScreen } from "./layout.js";
 import { renderStage } from "./StageRenderer.js";
 
@@ -23,10 +25,15 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     fitStageToScreen(app, stageRoot, mode, zoom, pan);
   };
 
-  const createStageRoot = () =>
-    renderStage(stage, assets.stageRenderMaps[worldId], assets, {
+  const createStageRoot = () => {
+    const nextStageRoot = renderStage(stage, assets.stageRenderMaps[worldId], assets, {
       highlightUnknown: mode === "dev" && unknownHighlightEnabled,
     });
+    const spawn = findStageSpawn(stage, worldId, assets.stageMetadata);
+    nextStageRoot.spawn = spawn;
+    if (spawn) nextStageRoot.addChild(createPlayerSprite(assets, spawn));
+    return nextStageRoot;
+  };
 
   const replaceStageRoot = () => {
     const previousStageRoot = stageRoot;
