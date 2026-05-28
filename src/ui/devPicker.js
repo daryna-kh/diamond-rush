@@ -33,6 +33,7 @@ export function createDevPicker({
   onZoomChange,
   onPanModeChange,
   onUnknownHighlightChange,
+  onDynamicHighlightChange,
 }) {
   const wrapper = document.createElement("div");
   wrapper.className = "dev-picker";
@@ -74,9 +75,14 @@ export function createDevPicker({
   unknownButton.type = "button";
   unknownButton.className = "dev-picker__button";
 
+  const dynamicButton = document.createElement("button");
+  dynamicButton.type = "button";
+  dynamicButton.className = "dev-picker__button";
+
   let currentWorldId = initialWorldId;
   let panModeEnabled = false;
   let unknownHighlightEnabled = false;
+  let dynamicHighlightEnabled = false;
   const renderZoomValue = () => {
     zoomValue.textContent = `${Number(zoomInput.value).toFixed(2)}x`;
   };
@@ -88,6 +94,10 @@ export function createDevPicker({
     unknownButton.textContent = unknownHighlightEnabled ? "Unknown: On" : "Unknown: Off";
     unknownButton.classList.toggle("dev-picker__button--active", unknownHighlightEnabled);
   };
+  const renderDynamicButton = () => {
+    dynamicButton.textContent = dynamicHighlightEnabled ? "Dynamic: On" : "Dynamic: Off";
+    dynamicButton.classList.toggle("dev-picker__button--active", dynamicHighlightEnabled);
+  };
 
   worldSelect.value = currentWorldId;
   fillStageOptions(stageSelect, stagesByWorld[currentWorldId].stages, stageMetadata, currentWorldId);
@@ -95,6 +105,7 @@ export function createDevPicker({
   renderZoomValue();
   renderPanButton();
   renderUnknownButton();
+  renderDynamicButton();
 
   worldSelect.addEventListener("change", () => {
     currentWorldId = worldSelect.value;
@@ -125,10 +136,16 @@ export function createDevPicker({
     onUnknownHighlightChange(unknownHighlightEnabled);
   });
 
+  dynamicButton.addEventListener("click", () => {
+    dynamicHighlightEnabled = !dynamicHighlightEnabled;
+    renderDynamicButton();
+    onDynamicHighlightChange(dynamicHighlightEnabled);
+  });
+
   worldLabel.append(worldText, worldSelect);
   stageLabel.append(stageText, stageSelect);
   zoomLabel.append(zoomText, zoomInput, zoomValue);
-  wrapper.append(worldLabel, stageLabel, zoomLabel, panButton, unknownButton);
+  wrapper.append(worldLabel, stageLabel, zoomLabel, panButton, unknownButton, dynamicButton);
   document.body.appendChild(wrapper);
 
   return {

@@ -1,5 +1,7 @@
+import { createDynamicEntityOverlay } from "../dev/dynamicEntityOverlay.js";
+import { createEntityLayers } from "../game/entityRenderer.js";
 import { createPlayerSprite } from "../game/playerSprite.js";
-import { findStageSpawn } from "../game/spawnPoints.js";
+import { classifyStage, isDynamicCell } from "../game/stageClassification.js";
 import { fitStageToScreen } from "./layout.js";
 import { renderStage } from "./StageRenderer.js";
 
@@ -11,6 +13,7 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
   let mode = "game";
   let zoom = 1;
   let unknownHighlightEnabled = false;
+  let dynamicHighlightEnabled = false;
   let worldId = initialWorldId;
   let stage = assets.stages[worldId].stages[0];
   let stageRoot = null;
@@ -26,12 +29,30 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
   };
 
   const createStageRoot = () => {
+    const classification = classifyStage(stage, assets.stageRenderMaps[worldId], {
+      worldId,
+      stageMetadata: assets.stageMetadata,
+    });
     const nextStageRoot = renderStage(stage, assets.stageRenderMaps[worldId], assets, {
       highlightUnknown: mode === "dev" && unknownHighlightEnabled,
+      skipDraw: (draw, cell) => isDynamicCell(cell) && draw.asset !== "background",
     });
-    const spawn = findStageSpawn(stage, worldId, assets.stageMetadata);
-    nextStageRoot.spawn = spawn;
-    if (spawn) nextStageRoot.addChild(createPlayerSprite(assets, spawn));
+    const entityLayers = createEntityLayers(assets, classification);
+
+    nextStageRoot.addChildAt(entityLayers.itemLayer, 2);
+    nextStageRoot.addChildAt(entityLayers.actorLayer, 3);
+    nextStageRoot.addChildAt(entityLayers.effectLayer, nextStageRoot.children.length - 1);
+    if (classification.playerSpawn) {
+      entityLayers.actorLayer.addChild(createPlayerSprite(assets, classification.playerSpawn));
+    }
+    if (mode === "dev" && dynamicHighlightEnabled) {
+      nextStageRoot.addChildAt(createDynamicEntityOverlay(classification), nextStageRoot.children.length - 1);
+    }
+
+    nextStageRoot.classification = classification;
+    nextStageRoot.spawn = classification.playerSpawn;
+    nextStageRoot.entityLayers = entityLayers;
+    nextStageRoot.dynamicHighlightEnabled = mode === "dev" && dynamicHighlightEnabled;
     return nextStageRoot;
   };
 
@@ -58,6 +79,7 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
         zoom,
         pan,
         unknownHighlightEnabled,
+        dynamicHighlightEnabled,
         worldId,
         stage,
         stageRoot,
@@ -82,7 +104,7 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     layout,
     setMode(nextMode) {
       mode = nextMode;
-      if (unknownHighlightEnabled) replaceStageRoot();
+      if (unknownHighlightEnabled || dynamicHighlightEnabled) replaceStageRoot();
       else layout();
     },
     setStage(nextWorldId, stageId) {
@@ -106,6 +128,10 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     },
     setUnknownHighlight(enabled) {
       unknownHighlightEnabled = enabled;
+      replaceStageRoot();
+    },
+    setDynamicHighlight(enabled) {
+      dynamicHighlightEnabled = enabled;
       replaceStageRoot();
     },
   };

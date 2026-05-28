@@ -2,12 +2,18 @@ import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 
 export const TILE_SIZE = 24;
 
-function getStageTriple(stage, index) {
-  return [
-    stage.layers.player[index],
-    stage.layers.foreground[index],
-    stage.layers.background[index],
-  ].join("/");
+function getStageCell(stage, x, y, index) {
+  const blocks = stage.layers.player[index];
+  const data = stage.layers.foreground[index];
+  const specifying_data = stage.layers.background[index];
+  return {
+    x,
+    y,
+    blocks,
+    data,
+    specifying_data,
+    key: [blocks, data, specifying_data].join("/"),
+  };
 }
 
 function createFrameTexture(assets, draw, textureCache) {
@@ -83,7 +89,8 @@ export function renderStage(stage, renderMap, assets, options = {}) {
   for (let y = 0; y < stage.height; y++) {
     for (let x = 0; x < stage.width; x++) {
       const index = x + y * stage.width;
-      const key = getStageTriple(stage, index);
+      const cell = getStageCell(stage, x, y, index);
+      const key = cell.key;
       const rule = renderRules.get(key);
 
       if (!rule) {
@@ -93,7 +100,10 @@ export function renderStage(stage, renderMap, assets, options = {}) {
         continue;
       }
 
-      for (const draw of rule.draws) addDraw(stageLayers, assets, draw, x, y, textureCache);
+      for (const draw of rule.draws) {
+        if (options.skipDraw?.(draw, cell, rule)) continue;
+        addDraw(stageLayers, assets, draw, x, y, textureCache);
+      }
       if (rule.unknown) {
         unknownTriples.set(key, (unknownTriples.get(key) || 0) + 1);
         unknownCells.push({ x, y, key, reason: "unknown-render-rule" });
@@ -106,6 +116,7 @@ export function renderStage(stage, renderMap, assets, options = {}) {
   stageRoot.stagePixelHeight = stage.height * TILE_SIZE;
   stageRoot.unknownTriples = unknownTriples;
   stageRoot.unknownCells = unknownCells;
+  stageRoot.stageLayers = stageLayers;
 
   return stageRoot;
 }

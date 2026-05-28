@@ -56,6 +56,7 @@ function getStatusLines(assets, worldId, stage, stageRoot, inspectedCell) {
   const world = assets.worlds.find((candidate) => candidate.id === worldId);
   const tilesAtlas = assets.atlases[`tiles-${worldId}`];
   const stageMetadata = getStageMetadata(assets, worldId, stage.id);
+  const classification = stageRoot.classification;
   const lines = [
     `Diamond Rush ${world?.label || worldId} stage ${stage.id}`,
     "",
@@ -68,6 +69,12 @@ function getStatusLines(assets, worldId, stage, stageRoot, inspectedCell) {
     `stage-render-map-${worldId}.json: ${assets.stageRenderMaps[worldId].triples.length} triples`,
     `unknown cells in stage ${stage.id}: ${getUnknownCount(stageRoot)}`,
     `spawn: ${stageRoot.spawn ? `${stageRoot.spawn.x}/${stageRoot.spawn.y} (${stageRoot.spawn.source})` : "-"}`,
+    `dynamic overlay: ${stageRoot.dynamicHighlightEnabled ? "on" : "off"}`,
+    `entities: ${classification?.entities.length ?? "-"}`,
+    `collectibles: ${classification?.collectibles.length ?? "-"}`,
+    `checkpoints: ${classification?.checkpoints.length ?? "-"}`,
+    `exits: ${classification?.exits.length ?? "-"}`,
+    `enemies: ${classification?.enemies.length ?? "-"}`,
   ];
   if (stageRoot.spawn?.rule) lines.push(`spawn rule: ${stageRoot.spawn.rule}`);
 

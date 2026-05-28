@@ -85,6 +85,10 @@ async function main() {
         scene.setUnknownHighlight(enabled);
         globalThis.__diamondRushUnknownHighlight = enabled;
       },
+      onDynamicHighlightChange: (enabled) => {
+        scene.setDynamicHighlight(enabled);
+        globalThis.__diamondRushDynamicHighlight = enabled;
+      },
     });
     devPicker.setMode(mode);
 
@@ -105,6 +109,7 @@ async function main() {
     globalThis.__diamondRushZoom = initialSceneState.zoom;
     globalThis.__diamondRushPanMode = panModeEnabled;
     globalThis.__diamondRushUnknownHighlight = initialSceneState.unknownHighlightEnabled;
+    globalThis.__diamondRushDynamicHighlight = initialSceneState.dynamicHighlightEnabled;
   } catch (error) {
     loadingText.text = error instanceof Error ? error.message : String(error);
     console.error(error);
