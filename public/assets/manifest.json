@@ -1,0 +1,117 @@
+{
+  "sourceDir": "/home/daryna/Dev/diamondRush/browser/diamond_EUD.jar",
+  "generatedAt": "2026-05-28T11:24:57.130Z",
+  "exports": [
+    {
+      "type": "stages",
+      "world": "angkor",
+      "file": "data/stages-angkor.json",
+      "count": 14
+    },
+    {
+      "type": "world-map",
+      "world": "angkor",
+      "file": "data/world-map-angkor.json",
+      "count": 13
+    },
+    {
+      "type": "atlas",
+      "role": "tiles",
+      "world": "angkor",
+      "file": "atlases/tiles-angkor.json",
+      "name": "tiles-angkor",
+      "imageCount": 108,
+      "skippedCount": 0
+    },
+    {
+      "type": "stages",
+      "world": "bavaria",
+      "file": "data/stages-bavaria.json",
+      "count": 13
+    },
+    {
+      "type": "world-map",
+      "world": "bavaria",
+      "file": "data/world-map-bavaria.json",
+      "count": 13
+    },
+    {
+      "type": "atlas",
+      "role": "tiles",
+      "world": "bavaria",
+      "file": "atlases/tiles-bavaria.json",
+      "name": "tiles-bavaria",
+      "imageCount": 145,
+      "skippedCount": 0
+    },
+    {
+      "type": "stages",
+      "world": "siberia",
+      "file": "data/stages-siberia.json",
+      "count": 14
+    },
+    {
+      "type": "world-map",
+      "world": "siberia",
+      "file": "data/world-map-siberia.json",
+      "count": 14
+    },
+    {
+      "type": "atlas",
+      "role": "tiles",
+      "world": "siberia",
+      "file": "atlases/tiles-siberia.json",
+      "name": "tiles-siberia",
+      "imageCount": 111,
+      "skippedCount": 0
+    },
+    {
+      "type": "atlas",
+      "role": "objects",
+      "file": "atlases/objects.json",
+      "name": "objects",
+      "imageCount": 3326,
+      "skippedCount": 0
+    },
+    {
+      "type": "atlas",
+      "role": "ui",
+      "file": "atlases/ui.json",
+      "name": "ui",
+      "imageCount": 940,
+      "skippedCount": 3
+    },
+    {
+      "type": "stage-render-map",
+      "world": "angkor",
+      "file": "data/stage-render-map-angkor.json",
+      "triples": 319,
+      "unknownTriples": 14
+    },
+    {
+      "type": "stage-render-map",
+      "world": "bavaria",
+      "file": "data/stage-render-map-bavaria.json",
+      "triples": 507,
+      "unknownTriples": 9
+    },
+    {
+      "type": "stage-render-map",
+      "world": "siberia",
+      "file": "data/stage-render-map-siberia.json",
+      "triples": 234,
+      "unknownTriples": 4
+    },
+    {
+      "type": "texts",
+      "file": "data/texts.json",
+      "languages": 16,
+      "skipped": 0
+    },
+    {
+      "type": "audio",
+      "file": "data/audio.json",
+      "count": 2
+    }
+  ]
+}

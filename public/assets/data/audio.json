@@ -1,0 +1,12 @@
+{
+  "audio": [
+    {
+      "source": "snd.amr",
+      "file": "audio/snd.amr"
+    },
+    {
+      "source": "snd.f",
+      "file": "audio/snd.f"
+    }
+  ]
+}
