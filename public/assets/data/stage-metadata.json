@@ -1,0 +1,40 @@
+{
+  "worlds": {
+    "angkor": {
+      "stages": {
+        "13": {
+          "role": "start",
+          "label": "Start level",
+          "displayStageNumber": 14,
+          "notes": [
+            "This is the initial Angkor level. Keep original stage id 13; UI displays it as stage 14."
+          ]
+        }
+      }
+    },
+    "bavaria": {
+      "stages": {
+        "0": {
+          "role": "start",
+          "label": "Start level",
+          "displayStageNumber": 1,
+          "notes": [
+            "This is the initial Bavaria level. It is the first Bavaria stage in the exported list."
+          ]
+        }
+      }
+    },
+    "siberia": {
+      "stages": {
+        "0": {
+          "role": "start",
+          "label": "Start level",
+          "displayStageNumber": 1,
+          "notes": [
+            "This is the initial Siberia level. It is the first Siberia stage in the exported list."
+          ]
+        }
+      }
+    }
+  }
+}

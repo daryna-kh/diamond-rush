@@ -1,4 +1,4 @@
-export function fitStageToScreen(app, stageRoot, statusText, mode) {
+export function fitStageToScreen(app, stageRoot, mode, zoom = 1, pan = { x: 0, y: 0 }) {
   const padding = 24;
   const isDev = mode === "dev";
   const sidebarWidth = isDev ? Math.min(360, Math.max(280, app.screen.width * 0.32)) : 0;
@@ -13,16 +13,13 @@ export function fitStageToScreen(app, stageRoot, statusText, mode) {
       ),
     ),
   );
+  const appliedScale = scale * zoom;
 
-  stageRoot.scale.set(scale);
-  stageRoot.x = isDev
+  stageRoot.scale.set(appliedScale);
+  const stageX = isDev
     ? padding
-    : Math.floor((app.screen.width - stageRoot.stagePixelWidth * scale) / 2);
-  stageRoot.y = padding;
+    : Math.floor((app.screen.width - stageRoot.stagePixelWidth * appliedScale) / 2);
+  stageRoot.x = stageX + (isDev ? pan.x : 0);
+  stageRoot.y = padding + (isDev ? pan.y : 0);
 
-  statusText.visible = isDev;
-  if (isDev) {
-    statusText.x = padding * 2 + stageRoot.stagePixelWidth * scale;
-    statusText.y = padding;
-  }
 }

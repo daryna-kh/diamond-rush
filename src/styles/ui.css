@@ -1,3 +1,15 @@
+#app {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app canvas {
+  display: block;
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
 .mode-switch {
   position: fixed;
   left: 50%;
@@ -16,4 +28,76 @@
 .mode-switch:hover {
   border-color: rgba(232, 240, 242, 0.56);
   background: rgba(28, 38, 41, 0.94);
+}
+
+.dev-picker {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(232, 240, 242, 0.32);
+  border-radius: 6px;
+  background: rgba(17, 23, 25, 0.88);
+  color: #e8f0f2;
+  font: 14px Arial, sans-serif;
+  padding: 8px 10px;
+}
+
+.dev-picker__field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dev-picker__select {
+  min-width: 116px;
+  border: 1px solid rgba(232, 240, 242, 0.24);
+  border-radius: 4px;
+  background: #111719;
+  color: #e8f0f2;
+  font: inherit;
+}
+
+.dev-picker__range {
+  width: 112px;
+}
+
+.dev-picker__value {
+  min-width: 38px;
+  text-align: right;
+}
+
+.dev-picker__button {
+  border: 1px solid rgba(232, 240, 242, 0.24);
+  border-radius: 4px;
+  background: #111719;
+  color: #e8f0f2;
+  font: inherit;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.dev-picker__button--active {
+  border-color: rgba(142, 220, 255, 0.72);
+  background: rgba(31, 75, 93, 0.88);
+}
+
+.debug-status {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 9;
+  width: min(360px, 32vw);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid rgba(232, 240, 242, 0.24);
+  border-radius: 6px;
+  background: rgba(17, 23, 25, 0.88);
+  color: #e8f0f2;
+  font: 14px/1.45 Arial, sans-serif;
+  padding: 12px;
+  white-space: pre-wrap;
 }

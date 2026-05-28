@@ -1,13 +1,10 @@
 import { Assets } from "pixi.js";
 
-const assetPaths = {
-  tilesAngkorImage: "/assets/atlases/tiles-angkor.png",
-  tilesAngkorJson: "/assets/atlases/tiles-angkor.json",
-  objectsImage: "/assets/atlases/objects.png",
-  objectsJson: "/assets/atlases/objects.json",
-  stagesAngkor: "/assets/data/stages-angkor.json",
-  stageRenderMapAngkor: "/assets/data/stage-render-map-angkor.json",
-};
+export const worlds = [
+  { id: "angkor", label: "Angkor" },
+  { id: "bavaria", label: "Bavaria" },
+  { id: "siberia", label: "Siberia" },
+];
 
 async function loadJson(url) {
   const response = await fetch(url);
@@ -16,37 +13,42 @@ async function loadJson(url) {
 }
 
 export async function loadInitialAssets() {
-  const [
-    tilesAngkorTexture,
-    objectsTexture,
-    tilesAngkorAtlas,
-    objectsAtlas,
-    stagesAngkor,
-    stageRenderMapAngkor,
-  ] = await Promise.all([
-    Assets.load(assetPaths.tilesAngkorImage),
-    Assets.load(assetPaths.objectsImage),
-    loadJson(assetPaths.tilesAngkorJson),
-    loadJson(assetPaths.objectsJson),
-    loadJson(assetPaths.stagesAngkor),
-    loadJson(assetPaths.stageRenderMapAngkor),
-  ]);
+  const objectsTexture = await Assets.load("/assets/atlases/objects.png");
+  const objectsAtlas = await loadJson("/assets/atlases/objects.json");
+  const stageMetadata = await loadJson("/assets/data/stage-metadata.json");
+
+  const worldAssets = await Promise.all(
+    worlds.map(async (world) => {
+      const [tilesTexture, tilesAtlas, stages, stageRenderMap] = await Promise.all([
+        Assets.load(`/assets/atlases/tiles-${world.id}.png`),
+        loadJson(`/assets/atlases/tiles-${world.id}.json`),
+        loadJson(`/assets/data/stages-${world.id}.json`),
+        loadJson(`/assets/data/stage-render-map-${world.id}.json`),
+      ]);
+
+      return { world, tilesTexture, tilesAtlas, stages, stageRenderMap };
+    }),
+  );
+
+  const textures = { objects: objectsTexture };
+  const atlases = { objects: objectsAtlas };
+  const stagesByWorld = {};
+  const stageRenderMaps = {};
+
+  for (const entry of worldAssets) {
+    const tilesKey = `tiles-${entry.world.id}`;
+    textures[tilesKey] = entry.tilesTexture;
+    atlases[tilesKey] = entry.tilesAtlas;
+    stagesByWorld[entry.world.id] = entry.stages;
+    stageRenderMaps[entry.world.id] = entry.stageRenderMap;
+  }
 
   return {
-    textures: {
-      tilesAngkor: tilesAngkorTexture,
-      "tiles-angkor": tilesAngkorTexture,
-      objects: objectsTexture,
-    },
-    atlases: {
-      tilesAngkor: tilesAngkorAtlas,
-      objects: objectsAtlas,
-    },
-    stages: {
-      angkor: stagesAngkor,
-    },
-    stageRenderMaps: {
-      angkor: stageRenderMapAngkor,
-    },
+    worlds,
+    textures,
+    atlases,
+    stages: stagesByWorld,
+    stageRenderMaps,
+    stageMetadata,
   };
 }

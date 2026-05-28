@@ -1,4 +1,4 @@
-import { Container, Rectangle, Sprite, Texture } from "pixi.js";
+import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 
 export const TILE_SIZE = 24;
 
@@ -48,13 +48,23 @@ function addDraw(stageLayers, assets, draw, x, y, textureCache) {
   layer.addChild(sprite);
 }
 
-export function renderStage(stage, renderMap, assets) {
+function addUnknownMarker(stageLayers, x, y) {
+  const marker = new Graphics()
+    .rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    .fill({ color: 0x000000, alpha: 0.9 })
+    .stroke({ color: 0xff4060, width: 1, alpha: 0.9 });
+  marker.label = `unknown:${x}:${y}`;
+  stageLayers.debug.addChild(marker);
+}
+
+export function renderStage(stage, renderMap, assets, options = {}) {
   const stageRoot = new Container();
   const stageLayers = {
     background: new Container(),
     player: new Container(),
     foreground: new Container(),
     "foreground+1": new Container(),
+    debug: new Container(),
   };
 
   stageRoot.addChild(
@@ -62,11 +72,13 @@ export function renderStage(stage, renderMap, assets) {
     stageLayers.player,
     stageLayers.foreground,
     stageLayers["foreground+1"],
+    stageLayers.debug,
   );
 
   const renderRules = new Map(renderMap.triples.map((triple) => [triple.key, triple]));
   const textureCache = new Map();
   const unknownTriples = new Map();
+  const unknownCells = [];
 
   for (let y = 0; y < stage.height; y++) {
     for (let x = 0; x < stage.width; x++) {
@@ -76,17 +88,24 @@ export function renderStage(stage, renderMap, assets) {
 
       if (!rule) {
         unknownTriples.set(key, (unknownTriples.get(key) || 0) + 1);
+        unknownCells.push({ x, y, key, reason: "missing-rule" });
+        if (options.highlightUnknown) addUnknownMarker(stageLayers, x, y);
         continue;
       }
 
       for (const draw of rule.draws) addDraw(stageLayers, assets, draw, x, y, textureCache);
-      if (rule.unknown) unknownTriples.set(key, (unknownTriples.get(key) || 0) + 1);
+      if (rule.unknown) {
+        unknownTriples.set(key, (unknownTriples.get(key) || 0) + 1);
+        unknownCells.push({ x, y, key, reason: "unknown-render-rule" });
+        if (options.highlightUnknown) addUnknownMarker(stageLayers, x, y);
+      }
     }
   }
 
   stageRoot.stagePixelWidth = stage.width * TILE_SIZE;
   stageRoot.stagePixelHeight = stage.height * TILE_SIZE;
   stageRoot.unknownTriples = unknownTriples;
+  stageRoot.unknownCells = unknownCells;
 
   return stageRoot;
 }

@@ -1,9 +1,11 @@
 import { Application, Text } from "pixi.js";
 import { loadInitialAssets } from "./assets/loadInitialAssets.js";
-import { fitStageToScreen } from "./render/layout.js";
-import { renderStage } from "./render/StageRenderer.js";
+import { createCellInspector } from "./dev/cellInspector.js";
+import { createStagePanController } from "./render/panController.js";
+import { createStageScene } from "./render/stageScene.js";
 import "./styles/ui.css";
-import { createStatusText, textStyle } from "./ui/debugStatus.js";
+import { createStatusPanel, textStyle } from "./ui/debugStatus.js";
+import { createDevPicker } from "./ui/devPicker.js";
 import { createModeSwitch, getMode } from "./utils/modes.js";
 
 async function main() {
@@ -28,31 +30,81 @@ async function main() {
 
   try {
     let mode = getMode();
+    let panModeEnabled = false;
     const assets = await loadInitialAssets();
     app.stage.removeChild(loadingText);
 
-    const stage = assets.stages.angkor.stages[0];
-    const stageRoot = renderStage(stage, assets.stageRenderMaps.angkor, assets);
-    const statusText = createStatusText(assets);
-    const unknownCount = Array.from(stageRoot.unknownTriples.values()).reduce(
-      (sum, count) => sum + count,
-      0,
+    const scene = createStageScene(app, assets, { initialWorldId: "angkor" });
+    scene.setMode(mode);
+    const initialSceneState = scene.getState();
+    const statusPanel = createStatusPanel(
+      assets,
+      initialSceneState.worldId,
+      initialSceneState.stage,
+      initialSceneState.stageRoot,
     );
+    statusPanel.setMode(mode);
+    scene.onSceneChange(({ worldId, stage, stageRoot }) => {
+      statusPanel.updateScene(worldId, stage, stageRoot);
+      globalThis.__diamondRushStage = stageRoot;
+      globalThis.__diamondRushWorld = worldId;
+    });
 
-    statusText.text += `\nunknown cells in stage 0: ${unknownCount}`;
-    app.stage.addChild(stageRoot);
-    app.stage.addChild(statusText);
-    fitStageToScreen(app, stageRoot, statusText, mode);
+    const panController = createStagePanController(app.canvas, {
+      isEnabled: () => mode === "dev" && panModeEnabled,
+      onPan(dx, dy) {
+        scene.panBy(dx, dy);
+      },
+    });
+    createCellInspector(app.canvas, {
+      getMode: () => mode,
+      getStage: () => scene.getStage(),
+      getStageRoot: () => scene.getStageRoot(),
+      getRenderMap: () => scene.getRenderMap(),
+      onInspect: (cell) => statusPanel.updateCell(cell),
+    });
+
+    const devPicker = createDevPicker({
+      worlds: assets.worlds,
+      stagesByWorld: assets.stages,
+      stageMetadata: assets.stageMetadata,
+      initialWorldId: initialSceneState.worldId,
+      initialStageId: initialSceneState.stage.id,
+      initialZoom: initialSceneState.zoom,
+      onChange: ({ worldId, stageId }) => scene.setStage(worldId, stageId),
+      onZoomChange: (nextZoom) => {
+        scene.setZoom(nextZoom);
+        globalThis.__diamondRushZoom = nextZoom;
+      },
+      onPanModeChange: (enabled) => {
+        panModeEnabled = enabled;
+        panController.updateCursor();
+        globalThis.__diamondRushPanMode = panModeEnabled;
+      },
+      onUnknownHighlightChange: (enabled) => {
+        scene.setUnknownHighlight(enabled);
+        globalThis.__diamondRushUnknownHighlight = enabled;
+      },
+    });
+    devPicker.setMode(mode);
+
     createModeSwitch(mode, (nextMode) => {
       mode = nextMode;
-      fitStageToScreen(app, stageRoot, statusText, mode);
+      scene.setMode(mode);
+      devPicker.setMode(mode);
+      statusPanel.setMode(mode);
+      panController.updateCursor();
       globalThis.__diamondRushMode = mode;
     });
-    window.addEventListener("resize", () => fitStageToScreen(app, stageRoot, statusText, mode));
+    window.addEventListener("resize", () => scene.layout());
 
     globalThis.__diamondRushAssets = assets;
-    globalThis.__diamondRushStage = stageRoot;
+    globalThis.__diamondRushStage = initialSceneState.stageRoot;
+    globalThis.__diamondRushWorld = initialSceneState.worldId;
     globalThis.__diamondRushMode = mode;
+    globalThis.__diamondRushZoom = initialSceneState.zoom;
+    globalThis.__diamondRushPanMode = panModeEnabled;
+    globalThis.__diamondRushUnknownHighlight = initialSceneState.unknownHighlightEnabled;
   } catch (error) {
     loadingText.text = error instanceof Error ? error.message : String(error);
     console.error(error);
