@@ -41,6 +41,7 @@ function createPlayerState(playerSpawn) {
     spawnX: playerSpawn?.x ?? 0,
     spawnY: playerSpawn?.y ?? 0,
     direction: "down",
+    walkFrame: 0,
     moving: false,
     alive: true,
     sprite: null,

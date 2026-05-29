@@ -93,6 +93,10 @@ function activateCheckpoints(entities) {
   }
 }
 
+function advancePlayerWalkFrame(player) {
+  player.walkFrame = (player.walkFrame || 0) + 1;
+}
+
 export function createGameSimulation(levelState) {
   let tickCount = 0;
 
@@ -127,6 +131,7 @@ export function createGameSimulation(levelState) {
       levelState.player.x = targetX;
       levelState.player.y = targetY;
       levelState.player.moving = true;
+      advancePlayerWalkFrame(levelState.player);
       result.moved = true;
 
       return result;
