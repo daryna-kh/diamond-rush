@@ -6,6 +6,14 @@
           "role": "start",
           "label": "Start level",
           "displayStageNumber": 14,
+          "spawn": {
+            "x": 5,
+            "y": 4,
+            "blocks": 79,
+            "data": 4,
+            "specifying_data": 0,
+            "source": "verified door/checkpoint 0"
+          },
           "notes": [
             "This is the initial Angkor level. Keep original stage id 13; UI displays it as stage 14."
           ]
@@ -18,6 +26,14 @@
           "role": "start",
           "label": "Start level",
           "displayStageNumber": 1,
+          "spawn": {
+            "x": 2,
+            "y": 19,
+            "blocks": 79,
+            "data": 4,
+            "specifying_data": 0,
+            "source": "first exported Bavaria level door/checkpoint 0"
+          },
           "notes": [
             "This is the initial Bavaria level. It is the first Bavaria stage in the exported list."
           ]
@@ -30,6 +46,14 @@
           "role": "start",
           "label": "Start level",
           "displayStageNumber": 1,
+          "spawn": {
+            "x": 3,
+            "y": 11,
+            "blocks": 79,
+            "data": 4,
+            "specifying_data": 0,
+            "source": "first exported Siberia level door/checkpoint 0"
+          },
           "notes": [
             "This is the initial Siberia level. It is the first Siberia stage in the exported list."
           ]

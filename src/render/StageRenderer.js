@@ -1,13 +1,20 @@
 import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
+import { isDynamicCell } from "../game/stageClassification.js";
 
 export const TILE_SIZE = 24;
 
-function getStageTriple(stage, index) {
-  return [
-    stage.layers.player[index],
-    stage.layers.foreground[index],
-    stage.layers.background[index],
-  ].join("/");
+function getStageCell(stage, x, y, index) {
+  const blocks = stage.layers.player[index];
+  const data = stage.layers.foreground[index];
+  const specifying_data = stage.layers.background[index];
+  return {
+    x,
+    y,
+    blocks,
+    data,
+    specifying_data,
+    key: [blocks, data, specifying_data].join("/"),
+  };
 }
 
 function createFrameTexture(assets, draw, textureCache) {
@@ -59,12 +66,13 @@ function addUnknownMarker(stageLayers, x, y) {
 
 export function renderStage(stage, renderMap, assets, options = {}) {
   const stageRoot = new Container();
+  const debugLayer = options.debugLayer || new Container();
   const stageLayers = {
     background: new Container(),
     player: new Container(),
     foreground: new Container(),
     "foreground+1": new Container(),
-    debug: new Container(),
+    debug: debugLayer,
   };
 
   stageRoot.addChild(
@@ -72,8 +80,8 @@ export function renderStage(stage, renderMap, assets, options = {}) {
     stageLayers.player,
     stageLayers.foreground,
     stageLayers["foreground+1"],
-    stageLayers.debug,
   );
+  if (!options.debugLayer) stageRoot.addChild(stageLayers.debug);
 
   const renderRules = new Map(renderMap.triples.map((triple) => [triple.key, triple]));
   const textureCache = new Map();
@@ -83,7 +91,8 @@ export function renderStage(stage, renderMap, assets, options = {}) {
   for (let y = 0; y < stage.height; y++) {
     for (let x = 0; x < stage.width; x++) {
       const index = x + y * stage.width;
-      const key = getStageTriple(stage, index);
+      const cell = getStageCell(stage, x, y, index);
+      const key = cell.key;
       const rule = renderRules.get(key);
 
       if (!rule) {
@@ -93,7 +102,12 @@ export function renderStage(stage, renderMap, assets, options = {}) {
         continue;
       }
 
-      for (const draw of rule.draws) addDraw(stageLayers, assets, draw, x, y, textureCache);
+      for (const draw of rule.draws) {
+        const skipDynamicEntity = options.skipDynamicEntities && isDynamicCell(cell) && draw.asset !== "background";
+        if (skipDynamicEntity) continue;
+        if (options.skipDraw?.(draw, cell, rule)) continue;
+        addDraw(stageLayers, assets, draw, x, y, textureCache);
+      }
       if (rule.unknown) {
         unknownTriples.set(key, (unknownTriples.get(key) || 0) + 1);
         unknownCells.push({ x, y, key, reason: "unknown-render-rule" });
@@ -106,6 +120,7 @@ export function renderStage(stage, renderMap, assets, options = {}) {
   stageRoot.stagePixelHeight = stage.height * TILE_SIZE;
   stageRoot.unknownTriples = unknownTriples;
   stageRoot.unknownCells = unknownCells;
+  stageRoot.stageLayers = stageLayers;
 
   return stageRoot;
 }
