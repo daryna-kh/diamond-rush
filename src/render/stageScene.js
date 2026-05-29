@@ -1,7 +1,10 @@
+import { Container } from "pixi.js";
 import { createDynamicEntityOverlay } from "../dev/dynamicEntityOverlay.js";
-import { createEntityLayers } from "../game/entityRenderer.js";
+import { createEntityLayers, syncLevelStateSprites } from "../game/entityRenderer.js";
+import { createLevelState } from "../game/levelState.js";
 import { createPlayerSprite } from "../game/playerSprite.js";
-import { classifyStage, isDynamicCell } from "../game/stageClassification.js";
+import { classifyStage } from "../game/stageClassification.js";
+import { createGameSimulation } from "../simulation/GameSimulation.js";
 import { fitStageToScreen } from "./layout.js";
 import { renderStage } from "./StageRenderer.js";
 
@@ -33,24 +36,53 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
       worldId,
       stageMetadata: assets.stageMetadata,
     });
-    const nextStageRoot = renderStage(stage, assets.stageRenderMaps[worldId], assets, {
+    const levelState = createLevelState(stage, classification);
+    const simulation = createGameSimulation(levelState);
+    const nextStageRoot = new Container();
+    const debugLayer = new Container();
+    const staticLayer = renderStage(stage, assets.stageRenderMaps[worldId], assets, {
       highlightUnknown: mode === "dev" && unknownHighlightEnabled,
-      skipDraw: (draw, cell) => isDynamicCell(cell) && draw.asset !== "background",
+      skipDynamicEntities: true,
+      debugLayer,
     });
-    const entityLayers = createEntityLayers(assets, classification);
+    const entityLayers = createEntityLayers(assets, levelState);
 
-    nextStageRoot.addChildAt(entityLayers.itemLayer, 2);
-    nextStageRoot.addChildAt(entityLayers.actorLayer, 3);
-    nextStageRoot.addChildAt(entityLayers.effectLayer, nextStageRoot.children.length - 1);
-    if (classification.playerSpawn) {
-      entityLayers.actorLayer.addChild(createPlayerSprite(assets, classification.playerSpawn));
+    nextStageRoot.label = "stageRoot";
+    staticLayer.label = "staticLayer";
+    debugLayer.label = "debugLayer";
+
+    nextStageRoot.addChild(
+      staticLayer,
+      entityLayers.itemLayer,
+      entityLayers.actorLayer,
+      entityLayers.effectLayer,
+      debugLayer,
+    );
+
+    if (levelState.playerSpawn) {
+      levelState.player.sprite = createPlayerSprite(assets, levelState.player);
+      entityLayers.actorLayer.addChild(levelState.player.sprite);
     }
     if (mode === "dev" && dynamicHighlightEnabled) {
-      nextStageRoot.addChildAt(createDynamicEntityOverlay(classification), nextStageRoot.children.length - 1);
+      debugLayer.addChild(createDynamicEntityOverlay(levelState));
     }
 
+    nextStageRoot.stagePixelWidth = staticLayer.stagePixelWidth;
+    nextStageRoot.stagePixelHeight = staticLayer.stagePixelHeight;
+    nextStageRoot.unknownTriples = staticLayer.unknownTriples;
+    nextStageRoot.unknownCells = staticLayer.unknownCells;
+    nextStageRoot.stageLayers = {
+      staticLayer,
+      itemLayer: entityLayers.itemLayer,
+      actorLayer: entityLayers.actorLayer,
+      effectLayer: entityLayers.effectLayer,
+      debugLayer,
+    };
+    nextStageRoot.staticRendererLayers = staticLayer.stageLayers;
     nextStageRoot.classification = classification;
-    nextStageRoot.spawn = classification.playerSpawn;
+    nextStageRoot.levelState = levelState;
+    nextStageRoot.simulation = simulation;
+    nextStageRoot.spawn = levelState.playerSpawn;
     nextStageRoot.entityLayers = entityLayers;
     nextStageRoot.dynamicHighlightEnabled = mode === "dev" && dynamicHighlightEnabled;
     return nextStageRoot;
@@ -83,6 +115,8 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
         worldId,
         stage,
         stageRoot,
+        levelState: stageRoot.levelState,
+        simulation: stageRoot.simulation,
       };
     },
     getMode() {
@@ -133,6 +167,12 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     setDynamicHighlight(enabled) {
       dynamicHighlightEnabled = enabled;
       replaceStageRoot();
+    },
+    tick(input) {
+      const result = stageRoot.simulation.tick(input);
+      syncLevelStateSprites(stageRoot.levelState);
+      emitSceneChange();
+      return result;
     },
   };
 

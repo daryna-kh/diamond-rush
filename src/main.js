@@ -48,6 +48,8 @@ async function main() {
       statusPanel.updateScene(worldId, stage, stageRoot);
       globalThis.__diamondRushStage = stageRoot;
       globalThis.__diamondRushWorld = worldId;
+      globalThis.__diamondRushLevelState = stageRoot.levelState;
+      globalThis.__diamondRushSimulation = stageRoot.simulation;
     });
 
     const panController = createStagePanController(app.canvas, {
@@ -104,6 +106,9 @@ async function main() {
 
     globalThis.__diamondRushAssets = assets;
     globalThis.__diamondRushStage = initialSceneState.stageRoot;
+    globalThis.__diamondRushLevelState = initialSceneState.levelState;
+    globalThis.__diamondRushSimulation = initialSceneState.simulation;
+    globalThis.__diamondRushTick = (input) => scene.tick(input);
     globalThis.__diamondRushWorld = initialSceneState.worldId;
     globalThis.__diamondRushMode = mode;
     globalThis.__diamondRushZoom = initialSceneState.zoom;

@@ -1,4 +1,5 @@
 import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
+import { isDynamicCell } from "../game/stageClassification.js";
 
 export const TILE_SIZE = 24;
 
@@ -65,12 +66,13 @@ function addUnknownMarker(stageLayers, x, y) {
 
 export function renderStage(stage, renderMap, assets, options = {}) {
   const stageRoot = new Container();
+  const debugLayer = options.debugLayer || new Container();
   const stageLayers = {
     background: new Container(),
     player: new Container(),
     foreground: new Container(),
     "foreground+1": new Container(),
-    debug: new Container(),
+    debug: debugLayer,
   };
 
   stageRoot.addChild(
@@ -78,8 +80,8 @@ export function renderStage(stage, renderMap, assets, options = {}) {
     stageLayers.player,
     stageLayers.foreground,
     stageLayers["foreground+1"],
-    stageLayers.debug,
   );
+  if (!options.debugLayer) stageRoot.addChild(stageLayers.debug);
 
   const renderRules = new Map(renderMap.triples.map((triple) => [triple.key, triple]));
   const textureCache = new Map();
@@ -101,6 +103,8 @@ export function renderStage(stage, renderMap, assets, options = {}) {
       }
 
       for (const draw of rule.draws) {
+        const skipDynamicEntity = options.skipDynamicEntities && isDynamicCell(cell) && draw.asset !== "background";
+        if (skipDynamicEntity) continue;
         if (options.skipDraw?.(draw, cell, rule)) continue;
         addDraw(stageLayers, assets, draw, x, y, textureCache);
       }

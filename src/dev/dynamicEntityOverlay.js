@@ -10,11 +10,11 @@ const ENTITY_COLORS = {
   "secret-exit": 0xb17cff,
 };
 
-export function createDynamicEntityOverlay(classification) {
+export function createDynamicEntityOverlay(levelState) {
   const overlay = new Container();
   overlay.label = "dynamic-entity-debug";
 
-  for (const entity of classification.entities) {
+  for (const entity of levelState.entities) {
     const color = ENTITY_COLORS[entity.type] || 0xffffff;
     const marker = new Graphics()
       .rect(entity.x * TILE_SIZE + 2, entity.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4)
