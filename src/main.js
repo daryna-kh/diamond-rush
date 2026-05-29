@@ -1,8 +1,11 @@
 import { Application, Text } from "pixi.js";
 import { loadInitialAssets } from "./assets/loadInitialAssets.js";
 import { createCellInspector } from "./dev/cellInspector.js";
+import { createInputQueue } from "./input/InputQueue.js";
+import { attachKeyboardInput } from "./input/KeyboardInput.js";
 import { createStagePanController } from "./render/panController.js";
 import { createStageScene } from "./render/stageScene.js";
+import { TICK_MS } from "./simulation/GameSimulation.js";
 import "./styles/ui.css";
 import { createStatusPanel, textStyle } from "./ui/debugStatus.js";
 import { createDevPicker } from "./ui/devPicker.js";
@@ -36,6 +39,8 @@ async function main() {
 
     const scene = createStageScene(app, assets, { initialWorldId: "angkor" });
     scene.setMode(mode);
+    const inputQueue = createInputQueue();
+    attachKeyboardInput(inputQueue);
     const initialSceneState = scene.getState();
     const statusPanel = createStatusPanel(
       assets,
@@ -104,10 +109,21 @@ async function main() {
     });
     window.addEventListener("resize", () => scene.layout());
 
+    let lastInputTickTime = performance.now();
+    app.ticker.add(() => {
+      const now = performance.now();
+      if (now - lastInputTickTime < TICK_MS) return;
+
+      lastInputTickTime = now;
+      const input = inputQueue.consume();
+      if (input) scene.tick(input);
+    });
+
     globalThis.__diamondRushAssets = assets;
     globalThis.__diamondRushStage = initialSceneState.stageRoot;
     globalThis.__diamondRushLevelState = initialSceneState.levelState;
     globalThis.__diamondRushSimulation = initialSceneState.simulation;
+    globalThis.__diamondRushInputQueue = inputQueue;
     globalThis.__diamondRushTick = (input) => scene.tick(input);
     globalThis.__diamondRushWorld = initialSceneState.worldId;
     globalThis.__diamondRushMode = mode;
