@@ -11,7 +11,41 @@ import { createStatusPanel, textStyle } from "./ui/debugStatus.js";
 import { createDevPicker } from "./ui/devPicker.js";
 import { createModeSwitch, getMode } from "./utils/modes.js";
 
+function isDevToolEnabled(tool) {
+  return import.meta.env.DEV && new URLSearchParams(window.location.search).get("tool") === tool;
+}
+
+async function loadObjectMatcherModule() {
+  if (!import.meta.env.DEV) return null;
+  try {
+    return await import(/* @vite-ignore */ "/src/tools/objectMatcher/index.js");
+  } catch (error) {
+    console.warn("Object matcher dev tool is unavailable.", error);
+    return null;
+  }
+}
+
+async function createDevToolButton(tool) {
+  if (!import.meta.env.DEV) return null;
+  if (tool !== "object-matcher") return null;
+
+  const objectMatcher = await loadObjectMatcherModule();
+  return objectMatcher?.createObjectMatcherButton() || null;
+}
+
 async function main() {
+  if (isDevToolEnabled("object-matcher")) {
+    try {
+      const objectMatcher = await loadObjectMatcherModule();
+      if (!objectMatcher) throw new Error("Object matcher dev tool is unavailable.");
+      await objectMatcher.createObjectMatcherTool();
+    } catch (error) {
+      document.body.textContent = error instanceof Error ? error.message : String(error);
+      console.error(error);
+    }
+    return;
+  }
+
   document.body.style.margin = "0";
   document.body.style.background = "#111719";
   document.body.style.overflow = "hidden";
@@ -107,6 +141,7 @@ async function main() {
       panController.updateCursor();
       globalThis.__diamondRushMode = mode;
     });
+    await createDevToolButton("object-matcher");
     window.addEventListener("resize", () => scene.layout());
 
     let lastSimulationTickTime = performance.now();

@@ -1,0 +1,104 @@
+.tool-switch {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  border: 1px solid rgba(232, 240, 242, 0.32);
+  border-radius: 6px;
+  background: rgba(17, 23, 25, 0.88);
+  color: #e8f0f2;
+  font: 14px Arial, sans-serif;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.tool-switch:hover {
+  border-color: rgba(232, 240, 242, 0.56);
+  background: rgba(28, 38, 41, 0.94);
+}
+
+.object-matcher {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  width: 100vw;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #111719;
+  color: #e8f0f2;
+  font: 14px Arial, sans-serif;
+  padding: 12px;
+}
+
+.object-matcher__header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.object-matcher__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.object-matcher__button {
+  border: 1px solid rgba(232, 240, 242, 0.32);
+  border-radius: 6px;
+  background: rgba(17, 23, 25, 0.88);
+  color: #e8f0f2;
+  font: inherit;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.object-matcher__button:hover {
+  border-color: rgba(232, 240, 242, 0.56);
+  background: rgba(28, 38, 41, 0.94);
+}
+
+.object-matcher__image-wrap {
+  overflow: auto;
+  border: 1px solid rgba(232, 240, 242, 0.24);
+  background: #0c1012;
+}
+
+.object-matcher__image-layer {
+  position: relative;
+  image-rendering: pixelated;
+}
+
+.object-matcher__image {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.object-matcher__marker {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: 2px solid #ffda5a;
+  background: rgba(255, 218, 90, 0.18);
+}
+
+.object-matcher__details {
+  overflow: auto;
+  border: 1px solid rgba(232, 240, 242, 0.24);
+  border-radius: 6px;
+  background: rgba(17, 23, 25, 0.92);
+  color: #e8f0f2;
+  font: 13px/1.45 Arial, sans-serif;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 840px) {
+  .object-matcher {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(360px, 60vh) minmax(220px, auto);
+  }
+}
