@@ -20,7 +20,7 @@ function isEditableTarget(target) {
   );
 }
 
-export function attachKeyboardInput(inputQueue, { isEnabled = () => true } = {}) {
+export function attachKeyboardInput(inputState, { isEnabled = () => true } = {}) {
   const onKeyDown = (event) => {
     if (!isEnabled() || isEditableTarget(event.target)) return;
 
@@ -28,14 +28,31 @@ export function attachKeyboardInput(inputQueue, { isEnabled = () => true } = {})
     if (!intent) return;
 
     event.preventDefault();
-    inputQueue.push(intent);
+    if (!event.repeat) inputState.press(event.code, intent);
+  };
+
+  const onKeyUp = (event) => {
+    const intent = KEY_INTENTS[event.code];
+    if (!intent) return;
+
+    inputState.release(event.code);
+    if (!isEnabled() || isEditableTarget(event.target)) return;
+    event.preventDefault();
+  };
+
+  const onBlur = () => {
+    inputState.clear();
   };
 
   window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onBlur);
 
   return {
     destroy() {
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
     },
   };
 }

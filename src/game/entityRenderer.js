@@ -1,5 +1,7 @@
 import { Container, Rectangle, Sprite, Texture } from "pixi.js";
 import { TILE_SIZE } from "../render/StageRenderer.js";
+import { syncDoorSprite } from "./doorSprite.js";
+import { syncPlayerSprite } from "./playerSprite.js";
 
 function createFrameTexture(assets, draw, textureCache) {
   const cacheKey = `${draw.atlas}:${draw.frameId}`;
@@ -63,10 +65,14 @@ export function createEntityLayers(assets, levelState) {
   };
 }
 
-export function syncLevelStateSprites(levelState) {
+export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
   for (const entity of levelState.entities) {
     const visible = entity.active && !entity.collected;
     for (const sprite of entity.sprites) {
+      if (syncDoorSprite(assets, entity, sprite, now)) {
+        sprite.visible = visible;
+        continue;
+      }
       const draw = sprite.entityDraw || { dx: 0, dy: 0 };
       sprite.x = entity.x * TILE_SIZE + draw.dx;
       sprite.y = entity.y * TILE_SIZE + draw.dy;
@@ -74,9 +80,5 @@ export function syncLevelStateSprites(levelState) {
     }
   }
 
-  if (levelState.player.sprite) {
-    levelState.player.sprite.x = levelState.player.x * TILE_SIZE;
-    levelState.player.sprite.y =
-      levelState.player.y * TILE_SIZE + TILE_SIZE - levelState.player.sprite.texture.height;
-  }
+  syncPlayerSprite(assets, levelState.player, now);
 }

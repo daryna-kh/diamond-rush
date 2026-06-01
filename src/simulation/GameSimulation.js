@@ -93,6 +93,38 @@ function activateCheckpoints(entities) {
   }
 }
 
+function advancePlayerWalkFrame(player) {
+  player.walkFrame = (player.walkFrame || 0) + 1;
+}
+
+function isHorizontalDirection(direction) {
+  return direction === "left" || direction === "right";
+}
+
+function shouldTurnBeforeMove(player, intent) {
+  return (
+    isHorizontalDirection(player.direction) &&
+    isHorizontalDirection(intent.direction) &&
+    player.direction !== intent.direction
+  );
+}
+
+function setPlayerDirection(player, direction) {
+  player.direction = direction;
+  player.walkFrame = 0;
+}
+
+function setPlayerMove(player, targetX, targetY, now) {
+  player.prevX = player.x;
+  player.prevY = player.y;
+  player.x = targetX;
+  player.y = targetY;
+  player.moveStartedAt = now;
+  player.moveDuration = TICK_MS;
+  player.moving = true;
+  advancePlayerWalkFrame(player);
+}
+
 export function createGameSimulation(levelState) {
   let tickCount = 0;
 
@@ -100,18 +132,26 @@ export function createGameSimulation(levelState) {
     get tickCount() {
       return tickCount;
     },
-    tick(input) {
+    tick(input, now = Date.now()) {
       tickCount += 1;
       const intent = normalizeInput(input);
       const result = {
         tick: tickCount,
         moved: false,
+        turned: false,
         blockedReason: null,
         collected: [],
       };
 
       levelState.player.moving = false;
+      if (levelState.player.intro?.active) return result;
       if (!intent) return result;
+
+      if (shouldTurnBeforeMove(levelState.player, intent)) {
+        setPlayerDirection(levelState.player, intent.direction);
+        result.turned = true;
+        return result;
+      }
 
       levelState.player.direction = intent.direction;
       const targetX = levelState.player.x + intent.dx;
@@ -124,9 +164,7 @@ export function createGameSimulation(levelState) {
 
       result.collected = collectDiamonds(levelState, target.entities);
       activateCheckpoints(target.entities);
-      levelState.player.x = targetX;
-      levelState.player.y = targetY;
-      levelState.player.moving = true;
+      setPlayerMove(levelState.player, targetX, targetY, now);
       result.moved = true;
 
       return result;
