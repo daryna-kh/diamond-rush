@@ -1,7 +1,7 @@
 import { Application, Text } from "pixi.js";
 import { loadInitialAssets } from "./assets/loadInitialAssets.js";
 import { createCellInspector } from "./dev/cellInspector.js";
-import { createInputQueue } from "./input/InputQueue.js";
+import { createInputState } from "./input/InputState.js";
 import { attachKeyboardInput } from "./input/KeyboardInput.js";
 import { createStagePanController } from "./render/panController.js";
 import { createStageScene } from "./render/stageScene.js";
@@ -39,8 +39,8 @@ async function main() {
 
     const scene = createStageScene(app, assets, { initialWorldId: "angkor" });
     scene.setMode(mode);
-    const inputQueue = createInputQueue();
-    attachKeyboardInput(inputQueue);
+    const inputState = createInputState();
+    attachKeyboardInput(inputState);
     const initialSceneState = scene.getState();
     const statusPanel = createStatusPanel(
       assets,
@@ -109,22 +109,23 @@ async function main() {
     });
     window.addEventListener("resize", () => scene.layout());
 
-    let lastInputTickTime = performance.now();
+    let lastSimulationTickTime = performance.now();
     app.ticker.add(() => {
       const now = performance.now();
-      if (now - lastInputTickTime < TICK_MS) return;
+      if (now - lastSimulationTickTime >= TICK_MS) {
+        lastSimulationTickTime = now;
+        scene.tick(inputState.consumeIntent(), now);
+      }
 
-      lastInputTickTime = now;
-      const input = inputQueue.consume();
-      if (input) scene.tick(input);
+      scene.update(now);
     });
 
     globalThis.__diamondRushAssets = assets;
     globalThis.__diamondRushStage = initialSceneState.stageRoot;
     globalThis.__diamondRushLevelState = initialSceneState.levelState;
     globalThis.__diamondRushSimulation = initialSceneState.simulation;
-    globalThis.__diamondRushInputQueue = inputQueue;
-    globalThis.__diamondRushTick = (input) => scene.tick(input);
+    globalThis.__diamondRushInputState = inputState;
+    globalThis.__diamondRushTick = (input) => scene.tick(input, performance.now());
     globalThis.__diamondRushWorld = initialSceneState.worldId;
     globalThis.__diamondRushMode = mode;
     globalThis.__diamondRushZoom = initialSceneState.zoom;

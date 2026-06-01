@@ -168,11 +168,14 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
       dynamicHighlightEnabled = enabled;
       replaceStageRoot();
     },
-    tick(input) {
-      const result = stageRoot.simulation.tick(input);
-      syncLevelStateSprites(assets, stageRoot.levelState);
+    tick(input, now = Date.now()) {
+      const result = stageRoot.simulation.tick(input, now);
+      syncLevelStateSprites(assets, stageRoot.levelState, now);
       emitSceneChange();
       return result;
+    },
+    update(now = Date.now()) {
+      syncLevelStateSprites(assets, stageRoot.levelState, now);
     },
   };
 
