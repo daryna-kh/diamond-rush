@@ -1,3 +1,5 @@
+import { getRawCell, getStaticPassability } from "./passability.js";
+
 export const TICK_MS = 200;
 
 const DIRECTIONS = {
@@ -32,19 +34,6 @@ function inputDirection(dx, dy) {
   return "down";
 }
 
-function getRawCell(levelState, x, y) {
-  const index = x + y * levelState.width;
-  const blocks = levelState.rawStage.layers.player[index];
-  const data = levelState.rawStage.layers.foreground[index];
-  const specifying_data = levelState.rawStage.layers.background[index];
-  return { blocks, data, specifying_data };
-}
-
-function isStaticBlocked(cell) {
-  if (cell.blocks >= 80 && cell.blocks <= 146) return true;
-  return cell.blocks !== 255 && cell.blocks !== 79 && cell.blocks !== 1 && cell.blocks !== 0;
-}
-
 function getActiveEntitiesAt(levelState, x, y) {
   return levelState.entities.filter((entity) => entity.active && entity.x === x && entity.y === y);
 }
@@ -62,6 +51,7 @@ function getTargetInfo(levelState, x, y) {
   const blockingEntity = entities.find(
     (entity) =>
       entity.type !== "diamond" &&
+      entity.type !== "leaf" &&
       entity.type !== "checkpoint" &&
       entity.type !== "player-spawn" &&
       entity.type !== "exit" &&
@@ -70,7 +60,10 @@ function getTargetInfo(levelState, x, y) {
   if (blockingEntity) return { passable: false, reason: blockingEntity.type, entities };
 
   const rawCell = getRawCell(levelState, x, y);
-  if (isStaticBlocked(rawCell)) return { passable: false, reason: "static", entities };
+  const staticPassability = getStaticPassability(rawCell);
+  if (!staticPassability.passable) {
+    return { passable: false, reason: staticPassability.reason, entities };
+  }
 
   return { passable: true, reason: null, entities };
 }
@@ -85,6 +78,17 @@ function collectDiamonds(levelState, entities) {
     collected.push(entity);
   }
   return collected;
+}
+
+function vanishLeaves(entities, now) {
+  const vanishing = [];
+  for (const entity of entities) {
+    if (entity.type !== "leaf" || entity.vanishing || entity.vanished) continue;
+    entity.vanishing = true;
+    entity.vanishStartedAt = now;
+    vanishing.push(entity);
+  }
+  return vanishing;
 }
 
 function activateCheckpoints(entities) {
@@ -141,6 +145,7 @@ export function createGameSimulation(levelState) {
         turned: false,
         blockedReason: null,
         collected: [],
+        vanishing: [],
       };
 
       levelState.player.moving = false;
@@ -163,6 +168,7 @@ export function createGameSimulation(levelState) {
       }
 
       result.collected = collectDiamonds(levelState, target.entities);
+      result.vanishing = vanishLeaves(target.entities, now);
       activateCheckpoints(target.entities);
       setPlayerMove(levelState.player, targetX, targetY, now);
       result.moved = true;

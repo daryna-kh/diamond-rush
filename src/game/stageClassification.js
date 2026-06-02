@@ -19,6 +19,7 @@ function getEntityType(cell) {
   if (cell.blocks === 79 && cell.data === 4 && cell.specifying_data === 0) return "player-spawn";
   if (cell.blocks === 1) return "diamond";
   if (cell.blocks === 0) return "boulder";
+  if (cell.blocks === 10) return "leaf";
   if (cell.data === 4) return "checkpoint";
   if (cell.data === 5) return "exit";
   if (cell.data === 28) return "secret-exit";
