@@ -46,6 +46,22 @@
   font-weight: 700;
 }
 
+.object-matcher__field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.object-matcher__select {
+  min-width: 150px;
+  border: 1px solid rgba(232, 240, 242, 0.24);
+  border-radius: 4px;
+  background: #111719;
+  color: #e8f0f2;
+  font: inherit;
+}
+
 .object-matcher__button {
   border: 1px solid rgba(232, 240, 242, 0.32);
   border-radius: 6px;

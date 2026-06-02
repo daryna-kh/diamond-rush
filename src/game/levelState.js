@@ -47,6 +47,14 @@ function createEntityState(entity) {
 
   if (entity.type === "diamond") return { ...baseEntity, collected: false };
   if (entity.type === "boulder") return { ...baseEntity, moved: false, falling: false };
+  if (entity.type === "leaf") {
+    return {
+      ...baseEntity,
+      vanishing: false,
+      vanished: false,
+      vanishStartedAt: 0,
+    };
+  }
   if (entity.type === "player-spawn") {
     return {
       ...baseEntity,
@@ -131,6 +139,7 @@ export function createLevelState(stage, classification) {
     entities,
     entitiesById: new Map(entities.map((entity) => [entity.id, entity])),
     collectibles: entities.filter((entity) => entity.type === "diamond"),
+    leaves: entities.filter((entity) => entity.type === "leaf"),
     boulders: entities.filter((entity) => entity.type === "boulder"),
     checkpoints: entities.filter((entity) => entity.type === "checkpoint" || entity.type === "player-spawn"),
     exits: entities.filter((entity) => entity.type === "exit" || entity.type === "secret-exit"),
