@@ -69,8 +69,8 @@ export function getEntityFallTarget(levelState, entity, x, y) {
 }
 
 export function setEntityMove(entity, targetX, targetY, now, duration = TICK_MS) {
-  entity.prevX = entity.x;
-  entity.prevY = entity.y;
+  entity.prevX = entity.renderX ?? entity.x;
+  entity.prevY = entity.renderY ?? entity.y;
   entity.x = targetX;
   entity.y = targetY;
   entity.moveStartedAt = now;

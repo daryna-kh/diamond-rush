@@ -52,7 +52,7 @@ function pushSnakeHorizontally(levelState, snake, dx, now) {
 
   snake.moved = true;
   setEntityMove(snake, target.x, target.y, now);
-  return true;
+  return snake;
 }
 
 export function applyBoulderPush(levelState, boulder, dx, now) {
@@ -61,9 +61,11 @@ export function applyBoulderPush(levelState, boulder, dx, now) {
   }
 
   const target = { x: boulder.x + dx, y: boulder.y };
+  let pushedSnake = null;
   if (!isHorizontalPushCellFree(levelState, boulder, target.x, target.y)) {
     const snake = getActiveEntityOfTypeAt(levelState, "snake", target.x, target.y);
-    if (!snake || !pushSnakeHorizontally(levelState, snake, dx, now)) {
+    pushedSnake = snake ? pushSnakeHorizontally(levelState, snake, dx, now) : null;
+    if (!pushedSnake) {
       return { moved: false, entity: boulder, kind: "push-blocked" };
     }
   }
@@ -71,7 +73,12 @@ export function applyBoulderPush(levelState, boulder, dx, now) {
   boulder.moved = true;
   boulder.playerSupportStartedAt = null;
   setEntityMove(boulder, target.x, target.y, now);
-  return { moved: true, entity: boulder, kind: "push" };
+  return {
+    moved: true,
+    entity: boulder,
+    kind: "push",
+    pushedEntities: pushedSnake ? [pushedSnake] : [],
+  };
 }
 
 export function applyBoulderGravity(levelState, boulder, now, helpers) {

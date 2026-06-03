@@ -83,7 +83,15 @@ function createEntityState(entity) {
       vanishStartedAt: 0,
     };
   }
-  if (entity.type === "snake") return { ...baseEntity, killed: false };
+  if (entity.type === "snake") {
+    const motion = getSnakeMotion(entity);
+    return {
+      ...baseEntity,
+      killed: false,
+      snakeAxis: motion.axis,
+      snakeDirection: motion.direction,
+    };
+  }
   if (entity.type === "player-spawn") {
     return {
       ...baseEntity,
@@ -153,6 +161,15 @@ function createPlayerState(stage, playerSpawn, spawnEntity) {
   };
 }
 
+function getSnakeMotion(entity) {
+  const asset = entity.draws.find((draw) => draw.asset?.startsWith("snake-"))?.asset || "";
+  if (asset.endsWith("-right")) return { axis: "x", direction: 1 };
+  if (asset.endsWith("-down")) return { axis: "y", direction: 1 };
+  return entity.specifying_data === 1 || entity.specifying_data === 3
+    ? { axis: "y", direction: 1 }
+    : { axis: "x", direction: 1 };
+}
+
 function snapshotEntity(entity) {
   return {
     x: entity.x,
@@ -176,6 +193,8 @@ function snapshotEntity(entity) {
     open: entity.open,
     doorAnimation: copyClosedDoorAnimation(entity.doorAnimation),
     playerSupportStartedAt: null,
+    snakeAxis: entity.snakeAxis,
+    snakeDirection: entity.snakeDirection,
   };
 }
 

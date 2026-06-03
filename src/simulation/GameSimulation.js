@@ -3,6 +3,7 @@ import {
   saveCheckpointSnapshot,
 } from "../game/levelState.js";
 import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
+import { applySnakeMovement } from "./entities/snakes.js";
 import {
   getActiveEntitiesAt,
   getEntityFallTarget,
@@ -23,7 +24,8 @@ const DIRECTIONS = {
 function normalizeInput(input) {
   if (!input) return null;
   if (typeof input === "string") return DIRECTIONS[input] || null;
-  if (input.direction && DIRECTIONS[input.direction]) return DIRECTIONS[input.direction];
+  if (input.direction && DIRECTIONS[input.direction])
+    return DIRECTIONS[input.direction];
   if (Number.isInteger(input.dx) && Number.isInteger(input.dy)) {
     if (input.dx === 0 && input.dy === 0) return null;
     const horizontal = Math.abs(input.dx) >= Math.abs(input.dy);
@@ -68,7 +70,8 @@ function getTargetInfo(levelState, x, y) {
       entity.type !== "exit" &&
       entity.type !== "secret-exit",
   );
-  if (blockingEntity) return { passable: false, reason: blockingEntity.type, entities };
+  if (blockingEntity)
+    return { passable: false, reason: blockingEntity.type, entities };
 
   const staticPassability = getStaticCellPassability(levelState, x, y);
   if (!staticPassability.passable) {
@@ -150,7 +153,32 @@ function tryPushBoulder(levelState, target, intent, now) {
   if (!boulder) return { pushed: false, entity: null };
 
   const result = applyBoulderPush(levelState, boulder, intent.dx, now);
-  return { pushed: result.moved, entity: boulder, reason: result.kind };
+  return {
+    pushed: result.moved,
+    entity: boulder,
+    pushedEntities: result.pushedEntities || [],
+    reason: result.kind,
+  };
+}
+
+function applySnakes(levelState, now, skippedEntities = new Set()) {
+  const moved = [];
+  const playerDamageEvents = [];
+  const snakes = levelState.enemies.filter(
+    (entity) =>
+      entity.type === "snake" &&
+      entity.active &&
+      !entity.killed &&
+      !skippedEntities.has(entity),
+  );
+
+  for (const snake of snakes) {
+    const result = applySnakeMovement(levelState, snake, now);
+    if (result.moved) moved.push(snake);
+    if (result.playerHit) playerDamageEvents.push(result.playerHit);
+  }
+
+  return { moved, playerDamageEvents };
 }
 
 function applyGravity(levelState, now, skippedEntities = new Set()) {
@@ -167,7 +195,9 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
 
   for (const entity of fallingEntities) {
     if (entity.type === "boulder") {
-      const result = applyBoulderGravity(levelState, entity, now, { getEntityFallTarget });
+      const result = applyBoulderGravity(levelState, entity, now, {
+        getEntityFallTarget,
+      });
       if (result.playerRespawn) {
         restoreCheckpointSnapshot(levelState);
         return { moved, playerRespawned: true, respawnReason: result.kind };
@@ -212,6 +242,8 @@ export function createGameSimulation(levelState) {
         vanishing: [],
         falling: [],
         pushed: [],
+        snakes: [],
+        playerDamageEvents: [],
         playerRespawned: false,
         respawnReason: null,
       };
@@ -234,6 +266,9 @@ export function createGameSimulation(levelState) {
             if (pushResult.pushed) {
               setPlayerMove(levelState.player, targetX, targetY, now);
               gravitySkippedEntities.add(pushResult.entity);
+              for (const pushedEntity of pushResult.pushedEntities) {
+                gravitySkippedEntities.add(pushedEntity);
+              }
               result.pushed = [pushResult.entity];
               result.moved = true;
             } else {
@@ -244,11 +279,16 @@ export function createGameSimulation(levelState) {
             result.vanishing = vanishLeaves(target.entities, now);
             setPlayerMove(levelState.player, targetX, targetY, now);
             const activatedCheckpoint = activateCheckpoints(target.entities);
-            if (activatedCheckpoint) saveCheckpointSnapshot(levelState, activatedCheckpoint);
+            if (activatedCheckpoint)
+              saveCheckpointSnapshot(levelState, activatedCheckpoint);
             result.moved = true;
           }
         }
       }
+
+      const snakes = applySnakes(levelState, now, gravitySkippedEntities);
+      result.snakes = snakes.moved;
+      result.playerDamageEvents = snakes.playerDamageEvents;
 
       const gravity = applyGravity(levelState, now, gravitySkippedEntities);
       result.falling = gravity.moved;
