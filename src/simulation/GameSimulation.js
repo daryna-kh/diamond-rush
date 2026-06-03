@@ -38,6 +38,22 @@ function getActiveEntitiesAt(levelState, x, y) {
   return levelState.entities.filter((entity) => entity.active && entity.x === x && entity.y === y);
 }
 
+function isPlayerAt(levelState, x, y) {
+  return levelState.player.alive !== false && levelState.player.x === x && levelState.player.y === y;
+}
+
+function isFallingEntity(entity) {
+  return entity.type === "diamond" || entity.type === "boulder";
+}
+
+function isGravityBlocker(entity) {
+  return (
+    entity.type === "leaf" ||
+    entity.type === "diamond" ||
+    entity.type === "boulder"
+  );
+}
+
 function getTargetInfo(levelState, x, y) {
   if (x < 0 || y < 0 || x >= levelState.width || y >= levelState.height) {
     return { passable: false, reason: "bounds", entities: [] };
@@ -129,6 +145,63 @@ function setPlayerMove(player, targetX, targetY, now) {
   advancePlayerWalkFrame(player);
 }
 
+function setEntityMove(entity, targetX, targetY, now) {
+  entity.prevX = entity.x;
+  entity.prevY = entity.y;
+  entity.x = targetX;
+  entity.y = targetY;
+  entity.moveStartedAt = now;
+  entity.moveDuration = TICK_MS;
+}
+
+function getEntityFallTarget(levelState, entity, x, y) {
+  if (x < 0 || y < 0 || x >= levelState.width || y >= levelState.height) {
+    return { canFall: false, hitPlayer: false };
+  }
+
+  if (isPlayerAt(levelState, x, y)) {
+    return {
+      canFall: entity.type === "diamond" && entity.falling,
+      hitPlayer: entity.type === "diamond" && entity.falling,
+    };
+  }
+
+  const blockingEntity = getActiveEntitiesAt(levelState, x, y).find(
+    (candidate) => candidate !== entity && isGravityBlocker(candidate),
+  );
+  if (blockingEntity) return { canFall: false, hitPlayer: false };
+
+  const rawCell = getRawCell(levelState, x, y);
+  return {
+    canFall: getStaticPassability(rawCell).passable,
+    hitPlayer: false,
+  };
+}
+
+function applyGravity(levelState, now) {
+  const moved = [];
+  const fallingEntities = levelState.entities
+    .filter((entity) => entity.active && !entity.collected && isFallingEntity(entity))
+    .sort((left, right) => right.y - left.y);
+
+  for (const entity of fallingEntities) {
+    const targetX = entity.x;
+    const targetY = entity.y + 1;
+    const target = getEntityFallTarget(levelState, entity, targetX, targetY);
+    if (!target.canFall) {
+      entity.falling = false;
+      continue;
+    }
+
+    entity.falling = true;
+    setEntityMove(entity, targetX, targetY, now);
+    if (target.hitPlayer) entity.disappearAfterMove = true;
+    moved.push(entity);
+  }
+
+  return moved;
+}
+
 export function createGameSimulation(levelState) {
   let tickCount = 0;
 
@@ -146,32 +219,34 @@ export function createGameSimulation(levelState) {
         blockedReason: null,
         collected: [],
         vanishing: [],
+        falling: [],
       };
 
       levelState.player.moving = false;
       if (levelState.player.intro?.active) return result;
-      if (!intent) return result;
 
-      if (shouldTurnBeforeMove(levelState.player, intent)) {
-        setPlayerDirection(levelState.player, intent.direction);
-        result.turned = true;
-        return result;
+      if (intent) {
+        if (shouldTurnBeforeMove(levelState.player, intent)) {
+          setPlayerDirection(levelState.player, intent.direction);
+          result.turned = true;
+        } else {
+          levelState.player.direction = intent.direction;
+          const targetX = levelState.player.x + intent.dx;
+          const targetY = levelState.player.y + intent.dy;
+          const target = getTargetInfo(levelState, targetX, targetY);
+          if (!target.passable) {
+            result.blockedReason = target.reason;
+          } else {
+            result.collected = collectDiamonds(levelState, target.entities);
+            result.vanishing = vanishLeaves(target.entities, now);
+            activateCheckpoints(target.entities);
+            setPlayerMove(levelState.player, targetX, targetY, now);
+            result.moved = true;
+          }
+        }
       }
 
-      levelState.player.direction = intent.direction;
-      const targetX = levelState.player.x + intent.dx;
-      const targetY = levelState.player.y + intent.dy;
-      const target = getTargetInfo(levelState, targetX, targetY);
-      if (!target.passable) {
-        result.blockedReason = target.reason;
-        return result;
-      }
-
-      result.collected = collectDiamonds(levelState, target.entities);
-      result.vanishing = vanishLeaves(target.entities, now);
-      activateCheckpoints(target.entities);
-      setPlayerMove(levelState.player, targetX, targetY, now);
-      result.moved = true;
+      result.falling = applyGravity(levelState, now);
 
       return result;
     },

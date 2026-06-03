@@ -35,6 +35,12 @@ function createEntityState(entity) {
     y: entity.y,
     initialX: entity.x,
     initialY: entity.y,
+    prevX: entity.x,
+    prevY: entity.y,
+    renderX: entity.x,
+    renderY: entity.y,
+    moveStartedAt: 0,
+    moveDuration: 0,
     blocks: entity.blocks,
     data: entity.data,
     specifying_data: entity.specifying_data,
@@ -45,7 +51,14 @@ function createEntityState(entity) {
     active: true,
   };
 
-  if (entity.type === "diamond") return { ...baseEntity, collected: false };
+  if (entity.type === "diamond") {
+    return {
+      ...baseEntity,
+      collected: false,
+      falling: false,
+      disappearAfterMove: false,
+    };
+  }
   if (entity.type === "boulder") return { ...baseEntity, moved: false, falling: false };
   if (entity.type === "leaf") {
     return {
