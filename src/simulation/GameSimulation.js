@@ -1,6 +1,18 @@
-import { getRawCell, getStaticPassability } from "./passability.js";
+import {
+  restoreCheckpointSnapshot,
+  saveCheckpointSnapshot,
+} from "../game/levelState.js";
+import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
+import { applySnakeMovement } from "./entities/snakes.js";
+import {
+  getActiveEntitiesAt,
+  getEntityFallTarget,
+  getStaticCellPassability,
+  setEntityMove,
+} from "./simulationGrid.js";
+import { TICK_MS } from "./simulationTiming.js";
 
-export const TICK_MS = 200;
+export { TICK_MS };
 
 const DIRECTIONS = {
   left: { dx: -1, dy: 0, direction: "left" },
@@ -12,7 +24,8 @@ const DIRECTIONS = {
 function normalizeInput(input) {
   if (!input) return null;
   if (typeof input === "string") return DIRECTIONS[input] || null;
-  if (input.direction && DIRECTIONS[input.direction]) return DIRECTIONS[input.direction];
+  if (input.direction && DIRECTIONS[input.direction])
+    return DIRECTIONS[input.direction];
   if (Number.isInteger(input.dx) && Number.isInteger(input.dy)) {
     if (input.dx === 0 && input.dy === 0) return null;
     const horizontal = Math.abs(input.dx) >= Math.abs(input.dy);
@@ -34,8 +47,8 @@ function inputDirection(dx, dy) {
   return "down";
 }
 
-function getActiveEntitiesAt(levelState, x, y) {
-  return levelState.entities.filter((entity) => entity.active && entity.x === x && entity.y === y);
+function isFallingEntity(entity) {
+  return entity.type === "diamond" || entity.type === "boulder";
 }
 
 function getTargetInfo(levelState, x, y) {
@@ -57,10 +70,10 @@ function getTargetInfo(levelState, x, y) {
       entity.type !== "exit" &&
       entity.type !== "secret-exit",
   );
-  if (blockingEntity) return { passable: false, reason: blockingEntity.type, entities };
+  if (blockingEntity)
+    return { passable: false, reason: blockingEntity.type, entities };
 
-  const rawCell = getRawCell(levelState, x, y);
-  const staticPassability = getStaticPassability(rawCell);
+  const staticPassability = getStaticCellPassability(levelState, x, y);
   if (!staticPassability.passable) {
     return { passable: false, reason: staticPassability.reason, entities };
   }
@@ -92,9 +105,14 @@ function vanishLeaves(entities, now) {
 }
 
 function activateCheckpoints(entities) {
+  let activatedCheckpoint = null;
   for (const entity of entities) {
-    if (entity.type === "checkpoint" || entity.type === "player-spawn") entity.activated = true;
+    if (entity.type === "checkpoint" || entity.type === "player-spawn") {
+      entity.activated = true;
+      activatedCheckpoint = entity;
+    }
   }
+  return activatedCheckpoint;
 }
 
 function advancePlayerWalkFrame(player) {
@@ -129,6 +147,82 @@ function setPlayerMove(player, targetX, targetY, now) {
   advancePlayerWalkFrame(player);
 }
 
+function tryPushBoulder(levelState, target, intent, now) {
+  if (intent.dy !== 0) return { pushed: false, entity: null };
+  const boulder = target.entities.find((entity) => entity.type === "boulder");
+  if (!boulder) return { pushed: false, entity: null };
+
+  const result = applyBoulderPush(levelState, boulder, intent.dx, now);
+  return {
+    pushed: result.moved,
+    entity: boulder,
+    pushedEntities: result.pushedEntities || [],
+    reason: result.kind,
+  };
+}
+
+function applySnakes(levelState, now, skippedEntities = new Set()) {
+  const moved = [];
+  const playerDamageEvents = [];
+  const snakes = levelState.enemies.filter(
+    (entity) =>
+      entity.type === "snake" &&
+      entity.active &&
+      !entity.killed &&
+      !skippedEntities.has(entity),
+  );
+
+  for (const snake of snakes) {
+    const result = applySnakeMovement(levelState, snake, now);
+    if (result.moved) moved.push(snake);
+    if (result.playerHit) playerDamageEvents.push(result.playerHit);
+  }
+
+  return { moved, playerDamageEvents };
+}
+
+function applyGravity(levelState, now, skippedEntities = new Set()) {
+  const moved = [];
+  const fallingEntities = levelState.entities
+    .filter(
+      (entity) =>
+        entity.active &&
+        !entity.collected &&
+        isFallingEntity(entity) &&
+        !skippedEntities.has(entity),
+    )
+    .sort((left, right) => right.y - left.y);
+
+  for (const entity of fallingEntities) {
+    if (entity.type === "boulder") {
+      const result = applyBoulderGravity(levelState, entity, now, {
+        getEntityFallTarget,
+      });
+      if (result.playerRespawn) {
+        restoreCheckpointSnapshot(levelState);
+        return { moved, playerRespawned: true, respawnReason: result.kind };
+      }
+      if (result.moved) moved.push(entity);
+      continue;
+    }
+
+    const targetX = entity.x;
+    const targetY = entity.y + 1;
+    const target = getEntityFallTarget(levelState, entity, targetX, targetY);
+    if (!target.canFall) {
+      entity.falling = false;
+      continue;
+    }
+
+    entity.falling = true;
+    setEntityMove(entity, targetX, targetY, now);
+    if (target.hitPlayer) entity.disappearAfterMove = true;
+    moved.push(entity);
+  }
+
+  return { moved, playerRespawned: false, respawnReason: null };
+}
+
 export function createGameSimulation(levelState) {
   let tickCount = 0;
 
@@ -146,32 +240,60 @@ export function createGameSimulation(levelState) {
         blockedReason: null,
         collected: [],
         vanishing: [],
+        falling: [],
+        pushed: [],
+        snakes: [],
+        playerDamageEvents: [],
+        playerRespawned: false,
+        respawnReason: null,
       };
 
       levelState.player.moving = false;
       if (levelState.player.intro?.active) return result;
-      if (!intent) return result;
 
-      if (shouldTurnBeforeMove(levelState.player, intent)) {
-        setPlayerDirection(levelState.player, intent.direction);
-        result.turned = true;
-        return result;
+      const gravitySkippedEntities = new Set();
+      if (intent) {
+        if (shouldTurnBeforeMove(levelState.player, intent)) {
+          setPlayerDirection(levelState.player, intent.direction);
+          result.turned = true;
+        } else {
+          levelState.player.direction = intent.direction;
+          const targetX = levelState.player.x + intent.dx;
+          const targetY = levelState.player.y + intent.dy;
+          const target = getTargetInfo(levelState, targetX, targetY);
+          if (!target.passable) {
+            const pushResult = tryPushBoulder(levelState, target, intent, now);
+            if (pushResult.pushed) {
+              setPlayerMove(levelState.player, targetX, targetY, now);
+              gravitySkippedEntities.add(pushResult.entity);
+              for (const pushedEntity of pushResult.pushedEntities) {
+                gravitySkippedEntities.add(pushedEntity);
+              }
+              result.pushed = [pushResult.entity];
+              result.moved = true;
+            } else {
+              result.blockedReason = target.reason;
+            }
+          } else {
+            result.collected = collectDiamonds(levelState, target.entities);
+            result.vanishing = vanishLeaves(target.entities, now);
+            setPlayerMove(levelState.player, targetX, targetY, now);
+            const activatedCheckpoint = activateCheckpoints(target.entities);
+            if (activatedCheckpoint)
+              saveCheckpointSnapshot(levelState, activatedCheckpoint);
+            result.moved = true;
+          }
+        }
       }
 
-      levelState.player.direction = intent.direction;
-      const targetX = levelState.player.x + intent.dx;
-      const targetY = levelState.player.y + intent.dy;
-      const target = getTargetInfo(levelState, targetX, targetY);
-      if (!target.passable) {
-        result.blockedReason = target.reason;
-        return result;
-      }
+      const snakes = applySnakes(levelState, now, gravitySkippedEntities);
+      result.snakes = snakes.moved;
+      result.playerDamageEvents = snakes.playerDamageEvents;
 
-      result.collected = collectDiamonds(levelState, target.entities);
-      result.vanishing = vanishLeaves(target.entities, now);
-      activateCheckpoints(target.entities);
-      setPlayerMove(levelState.player, targetX, targetY, now);
-      result.moved = true;
+      const gravity = applyGravity(levelState, now, gravitySkippedEntities);
+      result.falling = gravity.moved;
+      result.playerRespawned = gravity.playerRespawned;
+      result.respawnReason = gravity.respawnReason;
 
       return result;
     },

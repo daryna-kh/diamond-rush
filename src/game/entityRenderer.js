@@ -48,6 +48,32 @@ function getLeafAnimationFrameId(draw, frameIndex) {
   return `${match[1]}frame:${frameIndex}${match[2]}`;
 }
 
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function lerp(from, to, progress) {
+  return from + (to - from) * progress;
+}
+
+function updateEntityRenderPosition(entity, now) {
+  const duration = entity.moveDuration || 0;
+  const hasMove = duration > 0 && entity.moveStartedAt > 0;
+  const progress = hasMove ? clamp01((now - entity.moveStartedAt) / duration) : 1;
+
+  entity.renderX = lerp(entity.prevX ?? entity.x, entity.x, progress);
+  entity.renderY = lerp(entity.prevY ?? entity.y, entity.y, progress);
+  if (progress >= 1) {
+    entity.prevX = entity.x;
+    entity.prevY = entity.y;
+    if (entity.disappearAfterMove) {
+      entity.active = false;
+      entity.collected = true;
+      entity.disappearAfterMove = false;
+    }
+  }
+}
+
 function addEntityDraw(container, assets, entity, draw, textureCache) {
   if (
     draw.asset === "background" ||
@@ -78,6 +104,10 @@ function syncLeafSprite(assets, entity, sprite, now) {
 
   const draw = sprite.entityDraw || { dx: 0, dy: 0 };
   if (!entity.vanishing) {
+    if (sprite.entityAnimatedFrameId) {
+      sprite.texture = createFrameTexture(assets, draw, sprite.entityTextureCache);
+      sprite.entityAnimatedFrameId = null;
+    }
     sprite.x = entity.x * TILE_SIZE + draw.dx;
     sprite.y = entity.y * TILE_SIZE + draw.dy;
     sprite.visible = entity.active;
@@ -108,6 +138,14 @@ function syncLeafSprite(assets, entity, sprite, now) {
   return true;
 }
 
+function alignEntitySprite(entity, sprite) {
+  const draw = sprite.entityDraw || { dx: 0, dy: 0 };
+  const x = entity.renderX ?? entity.x;
+  const y = entity.renderY ?? entity.y;
+  sprite.x = x * TILE_SIZE + draw.dx;
+  sprite.y = y * TILE_SIZE + draw.dy;
+}
+
 export function createEntityLayers(assets, levelState) {
   const itemLayer = new Container();
   const actorLayer = new Container();
@@ -131,6 +169,7 @@ export function createEntityLayers(assets, levelState) {
 
 export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
   for (const entity of levelState.entities) {
+    updateEntityRenderPosition(entity, now);
     const visible = entity.active && !entity.collected;
     for (const sprite of entity.sprites) {
       if (syncDoorSprite(assets, entity, sprite, now)) {
@@ -138,9 +177,7 @@ export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
         continue;
       }
       if (syncLeafSprite(assets, entity, sprite, now)) continue;
-      const draw = sprite.entityDraw || { dx: 0, dy: 0 };
-      sprite.x = entity.x * TILE_SIZE + draw.dx;
-      sprite.y = entity.y * TILE_SIZE + draw.dy;
+      alignEntitySprite(entity, sprite);
       sprite.visible = visible;
     }
   }

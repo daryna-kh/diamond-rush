@@ -8,6 +8,7 @@ const ENTITY_COLORS = {
   checkpoint: 0x43e889,
   exit: 0x4aa3ff,
   "secret-exit": 0xb17cff,
+  snake: 0xff6f3c,
 };
 
 export function createDynamicEntityOverlay(levelState) {
