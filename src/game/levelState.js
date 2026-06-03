@@ -5,6 +5,14 @@ function copyDraw(draw) {
 const INTRO_PASSAGE_KEYS = new Set(["225/225/225", "255/255/255"]);
 const INTRO_TILE_DURATION = 250;
 
+function copyDoorAnimation(doorAnimation) {
+  return doorAnimation ? { ...doorAnimation } : doorAnimation;
+}
+
+function copyClosedDoorAnimation(doorAnimation) {
+  return doorAnimation ? { ...doorAnimation, state: "closed", startedAt: null } : doorAnimation;
+}
+
 function getStageCellKey(stage, x, y) {
   const index = x + y * stage.width;
   return [
@@ -59,7 +67,14 @@ function createEntityState(entity) {
       disappearAfterMove: false,
     };
   }
-  if (entity.type === "boulder") return { ...baseEntity, moved: false, falling: false };
+  if (entity.type === "boulder") {
+    return {
+      ...baseEntity,
+      moved: false,
+      falling: false,
+      playerSupportStartedAt: null,
+    };
+  }
   if (entity.type === "leaf") {
     return {
       ...baseEntity,
@@ -68,6 +83,7 @@ function createEntityState(entity) {
       vanishStartedAt: 0,
     };
   }
+  if (entity.type === "snake") return { ...baseEntity, killed: false };
   if (entity.type === "player-spawn") {
     return {
       ...baseEntity,
@@ -137,11 +153,90 @@ function createPlayerState(stage, playerSpawn, spawnEntity) {
   };
 }
 
+function snapshotEntity(entity) {
+  return {
+    x: entity.x,
+    y: entity.y,
+    prevX: entity.x,
+    prevY: entity.y,
+    renderX: entity.x,
+    renderY: entity.y,
+    moveStartedAt: 0,
+    moveDuration: 0,
+    active: entity.active,
+    collected: entity.collected,
+    falling: false,
+    moved: entity.moved,
+    killed: entity.killed,
+    disappearAfterMove: false,
+    vanishing: false,
+    vanished: entity.vanished,
+    vanishStartedAt: 0,
+    activated: entity.activated,
+    open: entity.open,
+    doorAnimation: copyClosedDoorAnimation(entity.doorAnimation),
+    playerSupportStartedAt: null,
+  };
+}
+
+function restoreEntity(entity, snapshot) {
+  Object.assign(entity, snapshot, {
+    doorAnimation: copyDoorAnimation(snapshot.doorAnimation),
+  });
+}
+
+function snapshotPlayer(player, checkpoint) {
+  const x = checkpoint?.x ?? player.x;
+  const y = checkpoint?.y ?? player.y;
+  return {
+    x,
+    y,
+    prevX: x,
+    prevY: y,
+    renderX: x,
+    renderY: y,
+    spawnX: x,
+    spawnY: y,
+    direction: "left",
+    walkFrame: 0,
+    moving: false,
+    visualMoving: false,
+    moveStartedAt: 0,
+    moveDuration: 0,
+    intro: null,
+    alive: true,
+    hidden: false,
+  };
+}
+
+export function saveCheckpointSnapshot(levelState, checkpoint) {
+  levelState.activeCheckpointId = checkpoint?.id || null;
+  levelState.checkpointSnapshot = {
+    checkpointId: levelState.activeCheckpointId,
+    player: snapshotPlayer(levelState.player, checkpoint),
+    entities: new Map(levelState.entities.map((entity) => [entity.id, snapshotEntity(entity)])),
+    collectedDiamonds: levelState.collectedDiamonds,
+  };
+}
+
+export function restoreCheckpointSnapshot(levelState) {
+  const snapshot = levelState.checkpointSnapshot;
+  if (!snapshot) return false;
+
+  Object.assign(levelState.player, snapshot.player);
+  for (const entity of levelState.entities) {
+    const entitySnapshot = snapshot.entities.get(entity.id);
+    if (entitySnapshot) restoreEntity(entity, entitySnapshot);
+  }
+  levelState.collectedDiamonds = snapshot.collectedDiamonds;
+  return true;
+}
+
 export function createLevelState(stage, classification) {
   const entities = classification.entities.map(createEntityState);
   const spawnEntity = entities.find((entity) => entity.type === "player-spawn") || null;
 
-  return {
+  const levelState = {
     stageId: stage.id,
     width: stage.width,
     height: stage.height,
@@ -156,8 +251,12 @@ export function createLevelState(stage, classification) {
     boulders: entities.filter((entity) => entity.type === "boulder"),
     checkpoints: entities.filter((entity) => entity.type === "checkpoint" || entity.type === "player-spawn"),
     exits: entities.filter((entity) => entity.type === "exit" || entity.type === "secret-exit"),
-    enemies: [],
+    enemies: entities.filter((entity) => entity.type === "snake"),
     effects: [],
     collectedDiamonds: 0,
+    activeCheckpointId: null,
+    checkpointSnapshot: null,
   };
+  saveCheckpointSnapshot(levelState, spawnEntity || classification.playerSpawn);
+  return levelState;
 }

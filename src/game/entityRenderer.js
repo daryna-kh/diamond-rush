@@ -104,6 +104,10 @@ function syncLeafSprite(assets, entity, sprite, now) {
 
   const draw = sprite.entityDraw || { dx: 0, dy: 0 };
   if (!entity.vanishing) {
+    if (sprite.entityAnimatedFrameId) {
+      sprite.texture = createFrameTexture(assets, draw, sprite.entityTextureCache);
+      sprite.entityAnimatedFrameId = null;
+    }
     sprite.x = entity.x * TILE_SIZE + draw.dx;
     sprite.y = entity.y * TILE_SIZE + draw.dy;
     sprite.visible = entity.active;

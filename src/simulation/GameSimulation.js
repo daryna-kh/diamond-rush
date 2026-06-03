@@ -1,6 +1,17 @@
-import { getRawCell, getStaticPassability } from "./passability.js";
+import {
+  restoreCheckpointSnapshot,
+  saveCheckpointSnapshot,
+} from "../game/levelState.js";
+import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
+import {
+  getActiveEntitiesAt,
+  getEntityFallTarget,
+  getStaticCellPassability,
+  setEntityMove,
+} from "./simulationGrid.js";
+import { TICK_MS } from "./simulationTiming.js";
 
-export const TICK_MS = 200;
+export { TICK_MS };
 
 const DIRECTIONS = {
   left: { dx: -1, dy: 0, direction: "left" },
@@ -34,24 +45,8 @@ function inputDirection(dx, dy) {
   return "down";
 }
 
-function getActiveEntitiesAt(levelState, x, y) {
-  return levelState.entities.filter((entity) => entity.active && entity.x === x && entity.y === y);
-}
-
-function isPlayerAt(levelState, x, y) {
-  return levelState.player.alive !== false && levelState.player.x === x && levelState.player.y === y;
-}
-
 function isFallingEntity(entity) {
   return entity.type === "diamond" || entity.type === "boulder";
-}
-
-function isGravityBlocker(entity) {
-  return (
-    entity.type === "leaf" ||
-    entity.type === "diamond" ||
-    entity.type === "boulder"
-  );
 }
 
 function getTargetInfo(levelState, x, y) {
@@ -75,8 +70,7 @@ function getTargetInfo(levelState, x, y) {
   );
   if (blockingEntity) return { passable: false, reason: blockingEntity.type, entities };
 
-  const rawCell = getRawCell(levelState, x, y);
-  const staticPassability = getStaticPassability(rawCell);
+  const staticPassability = getStaticCellPassability(levelState, x, y);
   if (!staticPassability.passable) {
     return { passable: false, reason: staticPassability.reason, entities };
   }
@@ -108,9 +102,14 @@ function vanishLeaves(entities, now) {
 }
 
 function activateCheckpoints(entities) {
+  let activatedCheckpoint = null;
   for (const entity of entities) {
-    if (entity.type === "checkpoint" || entity.type === "player-spawn") entity.activated = true;
+    if (entity.type === "checkpoint" || entity.type === "player-spawn") {
+      entity.activated = true;
+      activatedCheckpoint = entity;
+    }
   }
+  return activatedCheckpoint;
 }
 
 function advancePlayerWalkFrame(player) {
@@ -145,46 +144,38 @@ function setPlayerMove(player, targetX, targetY, now) {
   advancePlayerWalkFrame(player);
 }
 
-function setEntityMove(entity, targetX, targetY, now) {
-  entity.prevX = entity.x;
-  entity.prevY = entity.y;
-  entity.x = targetX;
-  entity.y = targetY;
-  entity.moveStartedAt = now;
-  entity.moveDuration = TICK_MS;
+function tryPushBoulder(levelState, target, intent, now) {
+  if (intent.dy !== 0) return { pushed: false, entity: null };
+  const boulder = target.entities.find((entity) => entity.type === "boulder");
+  if (!boulder) return { pushed: false, entity: null };
+
+  const result = applyBoulderPush(levelState, boulder, intent.dx, now);
+  return { pushed: result.moved, entity: boulder, reason: result.kind };
 }
 
-function getEntityFallTarget(levelState, entity, x, y) {
-  if (x < 0 || y < 0 || x >= levelState.width || y >= levelState.height) {
-    return { canFall: false, hitPlayer: false };
-  }
-
-  if (isPlayerAt(levelState, x, y)) {
-    return {
-      canFall: entity.type === "diamond" && entity.falling,
-      hitPlayer: entity.type === "diamond" && entity.falling,
-    };
-  }
-
-  const blockingEntity = getActiveEntitiesAt(levelState, x, y).find(
-    (candidate) => candidate !== entity && isGravityBlocker(candidate),
-  );
-  if (blockingEntity) return { canFall: false, hitPlayer: false };
-
-  const rawCell = getRawCell(levelState, x, y);
-  return {
-    canFall: getStaticPassability(rawCell).passable,
-    hitPlayer: false,
-  };
-}
-
-function applyGravity(levelState, now) {
+function applyGravity(levelState, now, skippedEntities = new Set()) {
   const moved = [];
   const fallingEntities = levelState.entities
-    .filter((entity) => entity.active && !entity.collected && isFallingEntity(entity))
+    .filter(
+      (entity) =>
+        entity.active &&
+        !entity.collected &&
+        isFallingEntity(entity) &&
+        !skippedEntities.has(entity),
+    )
     .sort((left, right) => right.y - left.y);
 
   for (const entity of fallingEntities) {
+    if (entity.type === "boulder") {
+      const result = applyBoulderGravity(levelState, entity, now, { getEntityFallTarget });
+      if (result.playerRespawn) {
+        restoreCheckpointSnapshot(levelState);
+        return { moved, playerRespawned: true, respawnReason: result.kind };
+      }
+      if (result.moved) moved.push(entity);
+      continue;
+    }
+
     const targetX = entity.x;
     const targetY = entity.y + 1;
     const target = getEntityFallTarget(levelState, entity, targetX, targetY);
@@ -199,7 +190,7 @@ function applyGravity(levelState, now) {
     moved.push(entity);
   }
 
-  return moved;
+  return { moved, playerRespawned: false, respawnReason: null };
 }
 
 export function createGameSimulation(levelState) {
@@ -220,11 +211,15 @@ export function createGameSimulation(levelState) {
         collected: [],
         vanishing: [],
         falling: [],
+        pushed: [],
+        playerRespawned: false,
+        respawnReason: null,
       };
 
       levelState.player.moving = false;
       if (levelState.player.intro?.active) return result;
 
+      const gravitySkippedEntities = new Set();
       if (intent) {
         if (shouldTurnBeforeMove(levelState.player, intent)) {
           setPlayerDirection(levelState.player, intent.direction);
@@ -235,18 +230,30 @@ export function createGameSimulation(levelState) {
           const targetY = levelState.player.y + intent.dy;
           const target = getTargetInfo(levelState, targetX, targetY);
           if (!target.passable) {
-            result.blockedReason = target.reason;
+            const pushResult = tryPushBoulder(levelState, target, intent, now);
+            if (pushResult.pushed) {
+              setPlayerMove(levelState.player, targetX, targetY, now);
+              gravitySkippedEntities.add(pushResult.entity);
+              result.pushed = [pushResult.entity];
+              result.moved = true;
+            } else {
+              result.blockedReason = target.reason;
+            }
           } else {
             result.collected = collectDiamonds(levelState, target.entities);
             result.vanishing = vanishLeaves(target.entities, now);
-            activateCheckpoints(target.entities);
             setPlayerMove(levelState.player, targetX, targetY, now);
+            const activatedCheckpoint = activateCheckpoints(target.entities);
+            if (activatedCheckpoint) saveCheckpointSnapshot(levelState, activatedCheckpoint);
             result.moved = true;
           }
         }
       }
 
-      result.falling = applyGravity(levelState, now);
+      const gravity = applyGravity(levelState, now, gravitySkippedEntities);
+      result.falling = gravity.moved;
+      result.playerRespawned = gravity.playerRespawned;
+      result.respawnReason = gravity.respawnReason;
 
       return result;
     },

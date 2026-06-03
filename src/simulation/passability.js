@@ -3,6 +3,8 @@ const PLAYER_SPAWN_BLOCK = 79;
 const DIAMOND_BLOCK = 1;
 const BOULDER_BLOCK = 0;
 const LEAF_BLOCK = 10;
+const SNAKE_BLOCK = 19;
+const RED_SNAKE_OR_ANACONDA_BLOCK = 43;
 const WALL_MIN = 80;
 const WALL_MAX = 146;
 
@@ -12,6 +14,7 @@ const STATIC_PASSABLE_BLOCKS = new Set([
   DIAMOND_BLOCK,
   BOULDER_BLOCK,
   LEAF_BLOCK,
+  SNAKE_BLOCK,
 ]);
 
 export function getRawCell(levelState, x, y) {
@@ -32,6 +35,7 @@ export function isWallCell(cell) {
 
 export function getTerrainType(cell) {
   if (cell.blocks === LEAF_BLOCK) return "passable";
+  if (cell.blocks === RED_SNAKE_OR_ANACONDA_BLOCK && cell.specifying_data !== 0) return "passable";
   if (isWallCell(cell)) return "wall";
   if (STATIC_PASSABLE_BLOCKS.has(cell.blocks)) return "passable";
   return "static-blocker";
