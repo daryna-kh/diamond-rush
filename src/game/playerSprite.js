@@ -1,5 +1,14 @@
 import { Rectangle, Sprite, Texture } from "pixi.js";
 import { TILE_SIZE } from "../render/StageRenderer.js";
+import {
+  CHEST_BROWN_REWARD_FRAME_MS,
+  CHEST_BROWN_REWARD_GEM_FRAME_ID,
+  CHEST_BROWN_REWARD_GEM_FRAME_INDEXES,
+  CHEST_BROWN_REWARD_LOOP_DURATION_MS,
+  CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
+  CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES,
+  getChestBrownRewardDurationMs,
+} from "./playerAnimations.js";
 
 const PLAYER_ATLAS = "objects";
 const PLAYER_TEXTURES = new Map();
@@ -11,7 +20,7 @@ function frameId(index) {
 }
 
 function frame(index, { flipX = false } = {}) {
-  return { frameId: frameId(index), flipX };
+  return { frameId: frameId(index), index, flipX };
 }
 
 const HORIZONTAL_DIRECTION_FRAMES = [62, 63, 64, 65, 66, 67];
@@ -62,7 +71,40 @@ function getLoopFrame(frames, now, frameMs) {
   return frames[index];
 }
 
+function getSpecialAnimationFrame(player, now) {
+  const animation = player.specialAnimation;
+  if (!animation?.active) return null;
+
+  const frameIndexes =
+    animation.frameIndexes || CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES;
+  const loopFrameIndexes =
+    animation.loopFrameIndexes || CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES;
+  const frameMs = animation.frameMs || CHEST_BROWN_REWARD_FRAME_MS;
+  const elapsed = Math.max(0, now - animation.startedAt);
+  const introDuration = frameIndexes.length * frameMs;
+  const loopDuration = animation.loopDurationMs || CHEST_BROWN_REWARD_LOOP_DURATION_MS;
+  const duration =
+    animation.durationMs || getChestBrownRewardDurationMs(frameMs);
+
+  if (elapsed >= duration) {
+    animation.active = false;
+    return null;
+  }
+
+  if (elapsed < introDuration) {
+    const animationFrameIndex = Math.floor(elapsed / frameMs);
+    return frame(frameIndexes[animationFrameIndex]);
+  }
+
+  const loopElapsed = Math.min(elapsed - introDuration, loopDuration);
+  const loopFrameIndex = Math.floor(loopElapsed / frameMs) % loopFrameIndexes.length;
+  return frame(loopFrameIndexes[loopFrameIndex]);
+}
+
 function getPlayerFrame(player, now) {
+  const specialFrame = getSpecialAnimationFrame(player, now);
+  if (specialFrame) return specialFrame;
+
   const direction = getDirection(player);
   if (player.moving || player.visualMoving) {
     const frames = PLAYER_SPRITE_FRAMES.walk[direction];
@@ -145,6 +187,27 @@ function alignPlayerSprite(player) {
     player.renderY * TILE_SIZE + TILE_SIZE - player.sprite.texture.height;
 }
 
+function syncPlayerGemSprite(assets, player, nextFrame) {
+  if (!player.sprite) return;
+
+  if (!player.gemSprite) {
+    const texture = createFrameTexture(assets, CHEST_BROWN_REWARD_GEM_FRAME_ID);
+    const sprite = new Sprite({ texture, roundPixels: true });
+    sprite.label = "player:gem-red";
+    sprite.anchor.set(0.5, 1);
+    sprite.x = 0;
+    sprite.y = -2;
+    sprite.visible = false;
+    player.sprite.addChild(sprite);
+    player.gemSprite = sprite;
+  }
+
+  player.gemSprite.visible =
+    player.specialAnimation?.active &&
+    player.specialAnimation.type === "chest-brown-reward" &&
+    CHEST_BROWN_REWARD_GEM_FRAME_INDEXES.includes(nextFrame.index);
+}
+
 export function syncPlayerSprite(assets, player, now = Date.now()) {
   if (!player.sprite) return;
 
@@ -159,6 +222,7 @@ export function syncPlayerSprite(assets, player, now = Date.now()) {
   player.sprite.scale.y = 1;
   player.spriteFlipX = nextFrame.flipX;
   player.sprite.visible = !player.hidden && player.alive !== false;
+  syncPlayerGemSprite(assets, player, nextFrame);
   alignPlayerSprite(player);
 }
 

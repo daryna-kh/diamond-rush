@@ -2,7 +2,15 @@ import {
   restoreCheckpointSnapshot,
   saveCheckpointSnapshot,
 } from "../game/levelState.js";
+import {
+  CHEST_BROWN_REWARD_FRAME_MS,
+  CHEST_BROWN_REWARD_LOOP_DURATION_MS,
+  CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
+  CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES,
+  getChestBrownRewardDurationMs,
+} from "../game/playerAnimations.js";
 import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
+import { applyFireSpitters } from "./entities/fireSpitters.js";
 import { applySnakeMovement } from "./entities/snakes.js";
 import {
   getActiveEntitiesAt,
@@ -66,6 +74,7 @@ function getTargetInfo(levelState, x, y) {
       entity.type !== "diamond" &&
       entity.type !== "leaf" &&
       entity.type !== "checkpoint" &&
+      entity.type !== "chest-brown" &&
       entity.type !== "player-spawn" &&
       entity.type !== "exit" &&
       entity.type !== "secret-exit",
@@ -113,6 +122,48 @@ function activateCheckpoints(entities) {
     }
   }
   return activatedCheckpoint;
+}
+
+function isPlayerSpecialAnimationActive(player, now) {
+  const animation = player.specialAnimation;
+  if (!animation?.active) return false;
+
+  const duration =
+    animation.durationMs ||
+    getChestBrownRewardDurationMs(animation.frameMs || CHEST_BROWN_REWARD_FRAME_MS);
+  if (duration <= 0 || now - animation.startedAt < duration) return true;
+
+  animation.active = false;
+  return false;
+}
+
+function startChestBrownRewardAnimation(player, chest, now) {
+  player.specialAnimation = {
+    type: "chest-brown-reward",
+    chestId: chest.id,
+    active: true,
+    startedAt: now,
+    frameMs: CHEST_BROWN_REWARD_FRAME_MS,
+    frameIndexes: CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES,
+    loopFrameIndexes: CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
+    loopDurationMs: CHEST_BROWN_REWARD_LOOP_DURATION_MS,
+    durationMs: getChestBrownRewardDurationMs(CHEST_BROWN_REWARD_FRAME_MS),
+  };
+  player.walkFrame = 0;
+}
+
+function openBrownChests(levelState, entities, now) {
+  const opened = [];
+  for (const chest of entities) {
+    if (chest.type !== "chest-brown" || chest.opened) continue;
+
+    chest.opened = true;
+    chest.opening = true;
+    chest.openStartedAt = now;
+    startChestBrownRewardAnimation(levelState.player, chest, now);
+    opened.push(chest);
+  }
+  return opened;
 }
 
 function advancePlayerWalkFrame(player) {
@@ -241,15 +292,18 @@ export function createGameSimulation(levelState) {
         collected: [],
         vanishing: [],
         falling: [],
+        fireSpitterEffects: [],
         pushed: [],
         snakes: [],
         playerDamageEvents: [],
+        openedChests: [],
         playerRespawned: false,
         respawnReason: null,
       };
 
       levelState.player.moving = false;
       if (levelState.player.intro?.active) return result;
+      if (isPlayerSpecialAnimationActive(levelState.player, now)) return result;
 
       const gravitySkippedEntities = new Set();
       if (intent) {
@@ -278,6 +332,7 @@ export function createGameSimulation(levelState) {
             result.collected = collectDiamonds(levelState, target.entities);
             result.vanishing = vanishLeaves(target.entities, now);
             setPlayerMove(levelState.player, targetX, targetY, now);
+            result.openedChests = openBrownChests(levelState, target.entities, now);
             const activatedCheckpoint = activateCheckpoints(target.entities);
             if (activatedCheckpoint)
               saveCheckpointSnapshot(levelState, activatedCheckpoint);
@@ -289,6 +344,7 @@ export function createGameSimulation(levelState) {
       const snakes = applySnakes(levelState, now, gravitySkippedEntities);
       result.snakes = snakes.moved;
       result.playerDamageEvents = snakes.playerDamageEvents;
+      result.fireSpitterEffects = applyFireSpitters(levelState, now);
 
       const gravity = applyGravity(levelState, now, gravitySkippedEntities);
       result.falling = gravity.moved;

@@ -103,7 +103,7 @@ export function renderStage(stage, renderMap, assets, options = {}) {
       }
 
       for (const draw of rule.draws) {
-        const skipDynamicEntity = options.skipDynamicEntities && isDynamicCell(cell) && draw.asset !== "background";
+        const skipDynamicEntity = options.skipDynamicEntities && isDynamicCell(cell, rule) && draw.asset !== "background";
         if (skipDynamicEntity) continue;
         if (options.skipDraw?.(draw, cell, rule)) continue;
         addDraw(stageLayers, assets, draw, x, y, textureCache);
