@@ -10,7 +10,9 @@ function copyDoorAnimation(doorAnimation) {
 }
 
 function copyClosedDoorAnimation(doorAnimation) {
-  return doorAnimation ? { ...doorAnimation, state: "closed", startedAt: null } : doorAnimation;
+  return doorAnimation
+    ? { ...doorAnimation, state: "closed", startedAt: null }
+    : doorAnimation;
 }
 
 function getStageCellKey(stage, x, y) {
@@ -92,6 +94,16 @@ function createEntityState(entity) {
       snakeDirection: motion.direction,
     };
   }
+  if (
+    entity.type === "fire-spitter-left" ||
+    entity.type === "fire-spitter-right"
+  ) {
+    return {
+      ...baseEntity,
+      fireDirectionX: entity.type === "fire-spitter-left" ? -1 : 1,
+      fireDistanceIndex: 0,
+    };
+  }
   if (entity.type === "player-spawn") {
     return {
       ...baseEntity,
@@ -101,10 +113,18 @@ function createEntityState(entity) {
     };
   }
   if (entity.type === "checkpoint") {
-    return { ...baseEntity, checkpointIndex: entity.specifying_data, activated: false };
+    return {
+      ...baseEntity,
+      checkpointIndex: entity.specifying_data,
+      activated: false,
+    };
   }
   if (entity.type === "exit" || entity.type === "secret-exit") {
-    return { ...baseEntity, open: false, secret: entity.type === "secret-exit" };
+    return {
+      ...baseEntity,
+      open: false,
+      secret: entity.type === "secret-exit",
+    };
   }
 
   return baseEntity;
@@ -116,7 +136,10 @@ function createPlayerIntro(stage, playerSpawn, spawnEntity) {
     x: playerSpawn.x - 2,
     y: playerSpawn.y,
   };
-  const distance = Math.max(1, Math.abs(playerSpawn.x - start.x) + Math.abs(playerSpawn.y - start.y));
+  const distance = Math.max(
+    1,
+    Math.abs(playerSpawn.x - start.x) + Math.abs(playerSpawn.y - start.y),
+  );
 
   return {
     active: true,
@@ -162,7 +185,8 @@ function createPlayerState(stage, playerSpawn, spawnEntity) {
 }
 
 function getSnakeMotion(entity) {
-  const asset = entity.draws.find((draw) => draw.asset?.startsWith("snake-"))?.asset || "";
+  const asset =
+    entity.draws.find((draw) => draw.asset?.startsWith("snake-"))?.asset || "";
   if (asset.endsWith("-right")) return { axis: "x", direction: 1 };
   if (asset.endsWith("-down")) return { axis: "y", direction: 1 };
   return entity.specifying_data === 1 || entity.specifying_data === 3
@@ -195,6 +219,8 @@ function snapshotEntity(entity) {
     playerSupportStartedAt: null,
     snakeAxis: entity.snakeAxis,
     snakeDirection: entity.snakeDirection,
+    fireDirectionX: entity.fireDirectionX,
+    fireDistanceIndex: entity.fireDistanceIndex,
   };
 }
 
@@ -233,7 +259,9 @@ export function saveCheckpointSnapshot(levelState, checkpoint) {
   levelState.checkpointSnapshot = {
     checkpointId: levelState.activeCheckpointId,
     player: snapshotPlayer(levelState.player, checkpoint),
-    entities: new Map(levelState.entities.map((entity) => [entity.id, snapshotEntity(entity)])),
+    entities: new Map(
+      levelState.entities.map((entity) => [entity.id, snapshotEntity(entity)]),
+    ),
     collectedDiamonds: levelState.collectedDiamonds,
   };
 }
@@ -248,12 +276,14 @@ export function restoreCheckpointSnapshot(levelState) {
     if (entitySnapshot) restoreEntity(entity, entitySnapshot);
   }
   levelState.collectedDiamonds = snapshot.collectedDiamonds;
+  for (const effect of levelState.effects) effect.active = false;
   return true;
 }
 
 export function createLevelState(stage, classification) {
   const entities = classification.entities.map(createEntityState);
-  const spawnEntity = entities.find((entity) => entity.type === "player-spawn") || null;
+  const spawnEntity =
+    entities.find((entity) => entity.type === "player-spawn") || null;
 
   const levelState = {
     stageId: stage.id,
@@ -261,16 +291,33 @@ export function createLevelState(stage, classification) {
     height: stage.height,
     rawStage: stage,
     classification,
-    playerSpawn: classification.playerSpawn ? { ...classification.playerSpawn } : null,
+    playerSpawn: classification.playerSpawn
+      ? { ...classification.playerSpawn }
+      : null,
     player: createPlayerState(stage, classification.playerSpawn, spawnEntity),
     entities,
     entitiesById: new Map(entities.map((entity) => [entity.id, entity])),
     collectibles: entities.filter((entity) => entity.type === "diamond"),
     leaves: entities.filter((entity) => entity.type === "leaf"),
     boulders: entities.filter((entity) => entity.type === "boulder"),
-    checkpoints: entities.filter((entity) => entity.type === "checkpoint" || entity.type === "player-spawn"),
-    exits: entities.filter((entity) => entity.type === "exit" || entity.type === "secret-exit"),
-    enemies: entities.filter((entity) => entity.type === "snake"),
+    checkpoints: entities.filter(
+      (entity) =>
+        entity.type === "checkpoint" || entity.type === "player-spawn",
+    ),
+    exits: entities.filter(
+      (entity) => entity.type === "exit" || entity.type === "secret-exit",
+    ),
+    fireSpitters: entities.filter(
+      (entity) =>
+        entity.type === "fire-spitter-left" ||
+        entity.type === "fire-spitter-right",
+    ),
+    enemies: entities.filter(
+      (entity) =>
+        entity.type === "snake" ||
+        entity.type === "fire-spitter-left" ||
+        entity.type === "fire-spitter-right",
+    ),
     effects: [],
     collectedDiamonds: 0,
     activeCheckpointId: null,

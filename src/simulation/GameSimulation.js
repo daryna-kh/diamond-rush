@@ -3,6 +3,7 @@ import {
   saveCheckpointSnapshot,
 } from "../game/levelState.js";
 import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
+import { applyFireSpitters } from "./entities/fireSpitters.js";
 import { applySnakeMovement } from "./entities/snakes.js";
 import {
   getActiveEntitiesAt,
@@ -241,6 +242,7 @@ export function createGameSimulation(levelState) {
         collected: [],
         vanishing: [],
         falling: [],
+        fireSpitterEffects: [],
         pushed: [],
         snakes: [],
         playerDamageEvents: [],
@@ -289,6 +291,7 @@ export function createGameSimulation(levelState) {
       const snakes = applySnakes(levelState, now, gravitySkippedEntities);
       result.snakes = snakes.moved;
       result.playerDamageEvents = snakes.playerDamageEvents;
+      result.fireSpitterEffects = applyFireSpitters(levelState, now);
 
       const gravity = applyGravity(levelState, now, gravitySkippedEntities);
       result.falling = gravity.moved;

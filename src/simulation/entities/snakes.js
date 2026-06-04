@@ -7,7 +7,7 @@ import {
 } from "../simulationGrid.js";
 import { TICK_MS } from "../simulationTiming.js";
 
-const SNAKE_VISUAL_SPEED = 0.75;
+const SNAKE_VISUAL_SPEED = 0.5;
 const SNAKE_MOVE_DURATION = Math.round(TICK_MS / SNAKE_VISUAL_SPEED);
 
 function getSnakeDelta(snake) {
@@ -38,7 +38,17 @@ function getSnakeMoveTarget(levelState, snake) {
   delta = getSnakeDelta(snake);
   target = { x: snake.x + delta.dx, y: snake.y + delta.dy };
 
-  return isSnakeMoveBlocked(levelState, snake, target.x, target.y) ? null : target;
+  return isSnakeMoveBlocked(levelState, snake, target.x, target.y)
+    ? null
+    : target;
+}
+
+function isSnakeMoveInProgress(snake, now) {
+  return (
+    snake.moveStartedAt > 0 &&
+    snake.moveDuration > 0 &&
+    now - snake.moveStartedAt < snake.moveDuration
+  );
 }
 
 export function applySnakeMovement(levelState, snake, now) {
@@ -46,8 +56,13 @@ export function applySnakeMovement(levelState, snake, now) {
     return { moved: false, entity: snake, kind: null, playerHit: null };
   }
 
+  if (isSnakeMoveInProgress(snake, now)) {
+    return { moved: false, entity: snake, kind: "moving", playerHit: null };
+  }
+
   const target = getSnakeMoveTarget(levelState, snake);
-  if (!target) return { moved: false, entity: snake, kind: "blocked", playerHit: null };
+  if (!target)
+    return { moved: false, entity: snake, kind: "blocked", playerHit: null };
 
   const playerHit = isPlayerAt(levelState, target.x, target.y)
     ? { source: "snake", entity: snake, x: target.x, y: target.y }

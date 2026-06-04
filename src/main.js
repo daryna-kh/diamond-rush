@@ -12,7 +12,10 @@ import { createDevPicker } from "./ui/devPicker.js";
 import { createModeSwitch, getMode } from "./utils/modes.js";
 
 function isDevToolEnabled(tool) {
-  return import.meta.env.DEV && new URLSearchParams(window.location.search).get("tool") === tool;
+  return (
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get("tool") === tool
+  );
 }
 
 async function loadObjectMatcherModule() {
@@ -37,10 +40,12 @@ async function main() {
   if (isDevToolEnabled("object-matcher")) {
     try {
       const objectMatcher = await loadObjectMatcherModule();
-      if (!objectMatcher) throw new Error("Object matcher dev tool is unavailable.");
+      if (!objectMatcher)
+        throw new Error("Object matcher dev tool is unavailable.");
       await objectMatcher.createObjectMatcherTool();
     } catch (error) {
-      document.body.textContent = error instanceof Error ? error.message : String(error);
+      document.body.textContent =
+        error instanceof Error ? error.message : String(error);
       console.error(error);
     }
     return;
@@ -160,13 +165,16 @@ async function main() {
     globalThis.__diamondRushLevelState = initialSceneState.levelState;
     globalThis.__diamondRushSimulation = initialSceneState.simulation;
     globalThis.__diamondRushInputState = inputState;
-    globalThis.__diamondRushTick = (input) => scene.tick(input, performance.now());
+    globalThis.__diamondRushTick = (input) =>
+      scene.tick(input, performance.now());
     globalThis.__diamondRushWorld = initialSceneState.worldId;
     globalThis.__diamondRushMode = mode;
     globalThis.__diamondRushZoom = initialSceneState.zoom;
     globalThis.__diamondRushPanMode = panModeEnabled;
-    globalThis.__diamondRushUnknownHighlight = initialSceneState.unknownHighlightEnabled;
-    globalThis.__diamondRushDynamicHighlight = initialSceneState.dynamicHighlightEnabled;
+    globalThis.__diamondRushUnknownHighlight =
+      initialSceneState.unknownHighlightEnabled;
+    globalThis.__diamondRushDynamicHighlight =
+      initialSceneState.dynamicHighlightEnabled;
   } catch (error) {
     loadingText.text = error instanceof Error ? error.message : String(error);
     console.error(error);

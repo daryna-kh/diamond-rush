@@ -21,6 +21,8 @@ function getEntityType(cell) {
   if (cell.blocks === 0) return "boulder";
   if (cell.blocks === 10) return "leaf";
   if (cell.blocks === 19 || (cell.blocks === 43 && cell.specifying_data !== 0)) return "snake";
+  if (cell.blocks === 22) return "fire-spitter-right";
+  if (cell.blocks === 23) return "fire-spitter-left";
   if (cell.data === 4) return "checkpoint";
   if (cell.data === 5) return "exit";
   if (cell.data === 28) return "secret-exit";
@@ -67,7 +69,13 @@ export function classifyStage(stage, renderMap, { worldId, stageMetadata } = {})
 
       classification.entities.push(entity);
       if (entityType === "diamond") classification.collectibles.push(entity);
-      else if (entityType === "snake") classification.enemies.push(entity);
+      else if (
+        entityType === "snake" ||
+        entityType === "fire-spitter-left" ||
+        entityType === "fire-spitter-right"
+      ) {
+        classification.enemies.push(entity);
+      }
       else if (entityType === "checkpoint" || entityType === "player-spawn") {
         classification.checkpoints.push(entity);
       } else if (entityType === "exit" || entityType === "secret-exit") {
