@@ -9,6 +9,12 @@ import { syncPlayerSprite } from "./playerSprite.js";
 
 const LEAF_FRAME_MS = 45;
 const LEAF_FRAME_COUNT = 7;
+const CHEST_BROWN_FRAME_MS = 280;
+const CHEST_BROWN_CLOSED_FRAME_ID = "gen3.f#3:frame:1:palette:0";
+const CHEST_BROWN_OPEN_FRAMES = [
+  "gen3.f#3:frame:2:palette:0",
+  "gen3.f#3:frame:3:palette:0",
+];
 
 function createFrameTexture(assets, draw, textureCache) {
   const cacheKey = `${draw.atlas}:${draw.frameId}`;
@@ -235,6 +241,55 @@ function syncSnakeSprite(entity, sprite) {
   return true;
 }
 
+function getChestBrownFrameId(entity, now) {
+  if (!entity.opening) {
+    return entity.opened
+      ? CHEST_BROWN_OPEN_FRAMES[CHEST_BROWN_OPEN_FRAMES.length - 1]
+      : CHEST_BROWN_CLOSED_FRAME_ID;
+  }
+
+  const elapsed = Math.max(0, now - entity.openStartedAt);
+  const frameIndex = Math.min(
+    Math.floor(elapsed / CHEST_BROWN_FRAME_MS),
+    CHEST_BROWN_OPEN_FRAMES.length - 1,
+  );
+  if (frameIndex === CHEST_BROWN_OPEN_FRAMES.length - 1) {
+    entity.opening = false;
+  }
+  return CHEST_BROWN_OPEN_FRAMES[frameIndex];
+}
+
+function syncChestBrownSprite(assets, entity, sprite, now) {
+  if (entity.type !== "chest-brown") return false;
+
+  const draw = sprite.entityDraw || { dx: 0, dy: 0 };
+  if (draw.asset !== "chest-brown") {
+    sprite.visible = false;
+    return true;
+  }
+
+  const frameId = getChestBrownFrameId(entity, now);
+  const texture = createAtlasFrameTexture(
+    assets,
+    draw.atlas,
+    frameId,
+    sprite.entityTextureCache,
+  );
+  if (texture && sprite.entityAnimatedFrameId !== frameId) {
+    sprite.texture = texture;
+    sprite.entityAnimatedFrameId = frameId;
+  }
+
+  const x = entity.renderX ?? entity.x;
+  const y = entity.renderY ?? entity.y;
+  sprite.scale.x = 1;
+  sprite.scale.y = 1;
+  sprite.x = x * TILE_SIZE + Math.floor((TILE_SIZE - sprite.texture.width) / 2);
+  sprite.y = y * TILE_SIZE + draw.dy;
+  sprite.visible = entity.active;
+  return true;
+}
+
 function alignEntitySprite(entity, sprite) {
   const draw = sprite.entityDraw || { dx: 0, dy: 0 };
   const x = entity.renderX ?? entity.x;
@@ -284,6 +339,7 @@ export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
         sprite.visible = visible;
         continue;
       }
+      if (syncChestBrownSprite(assets, entity, sprite, now)) continue;
       alignEntitySprite(entity, sprite);
       sprite.visible = visible;
     }

@@ -1,6 +1,5 @@
 import "./styles.css";
 
-const ATLAS_DIR = "/assets/atlases";
 const ATLAS_JSON_MODULES = import.meta.glob("../../../public/assets/atlases/*.json", {
   eager: true,
 });
@@ -43,8 +42,12 @@ function setAtlasParam(value) {
   window.history.replaceState({}, "", url);
 }
 
+function publicAssetUrl(path) {
+  return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, "")}`;
+}
+
 function atlasImageUrl(atlasId) {
-  return `${ATLAS_DIR}/${atlasId}.png`;
+  return publicAssetUrl(`assets/atlases/${atlasId}.png`);
 }
 
 function getFrameMatches(frames, x, y) {

@@ -5,6 +5,7 @@ const BOULDER_BLOCK = 0;
 const LEAF_BLOCK = 10;
 const SNAKE_BLOCK = 19;
 const RED_SNAKE_OR_ANACONDA_BLOCK = 43;
+const CHEST_BROWN_DATA = 33;
 const WALL_MIN = 80;
 const WALL_MAX = 146;
 
@@ -36,6 +37,7 @@ export function isWallCell(cell) {
 export function getTerrainType(cell) {
   if (cell.blocks === LEAF_BLOCK) return "passable";
   if (cell.blocks === RED_SNAKE_OR_ANACONDA_BLOCK && cell.specifying_data !== 0) return "passable";
+  if (cell.data === CHEST_BROWN_DATA) return "passable";
   if (isWallCell(cell)) return "wall";
   if (STATIC_PASSABLE_BLOCKS.has(cell.blocks)) return "passable";
   return "static-blocker";

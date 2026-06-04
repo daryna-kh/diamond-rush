@@ -15,7 +15,11 @@ function getCell(stage, x, y) {
   };
 }
 
-function getEntityType(cell) {
+function hasDrawAsset(rule, asset) {
+  return rule?.draws?.some((draw) => draw.asset === asset);
+}
+
+function getEntityType(cell, rule = null) {
   if (cell.blocks === 79 && cell.data === 4 && cell.specifying_data === 0) return "player-spawn";
   if (cell.blocks === 1) return "diamond";
   if (cell.blocks === 0) return "boulder";
@@ -23,6 +27,7 @@ function getEntityType(cell) {
   if (cell.blocks === 19 || (cell.blocks === 43 && cell.specifying_data !== 0)) return "snake";
   if (cell.blocks === 22) return "fire-spitter-right";
   if (cell.blocks === 23) return "fire-spitter-left";
+  if (hasDrawAsset(rule, "chest-brown")) return "chest-brown";
   if (cell.data === 4) return "checkpoint";
   if (cell.data === 5) return "exit";
   if (cell.data === 28) return "secret-exit";
@@ -46,7 +51,7 @@ export function classifyStage(stage, renderMap, { worldId, stageMetadata } = {})
     for (let x = 0; x < stage.width; x++) {
       const cell = getCell(stage, x, y);
       const rule = renderRules.get(cell.key);
-      const entityType = getEntityType(cell);
+      const entityType = getEntityType(cell, rule);
 
       if (!rule || rule.unknown) {
         classification.unknown.push({
@@ -87,6 +92,6 @@ export function classifyStage(stage, renderMap, { worldId, stageMetadata } = {})
   return classification;
 }
 
-export function isDynamicCell(cell) {
-  return !!getEntityType(cell);
+export function isDynamicCell(cell, rule = null) {
+  return !!getEntityType(cell, rule);
 }

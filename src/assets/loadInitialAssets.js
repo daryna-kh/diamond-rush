@@ -12,18 +12,22 @@ async function loadJson(url) {
   return response.json();
 }
 
+function publicAssetUrl(path) {
+  return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, "")}`;
+}
+
 export async function loadInitialAssets() {
-  const objectsTexture = await Assets.load("/assets/atlases/objects.png");
-  const objectsAtlas = await loadJson("/assets/atlases/objects.json");
-  const stageMetadata = await loadJson("/assets/data/stage-metadata.json");
+  const objectsTexture = await Assets.load(publicAssetUrl("assets/atlases/objects.png"));
+  const objectsAtlas = await loadJson(publicAssetUrl("assets/atlases/objects.json"));
+  const stageMetadata = await loadJson(publicAssetUrl("assets/data/stage-metadata.json"));
 
   const worldAssets = await Promise.all(
     worlds.map(async (world) => {
       const [tilesTexture, tilesAtlas, stages, stageRenderMap] = await Promise.all([
-        Assets.load(`/assets/atlases/tiles-${world.id}.png`),
-        loadJson(`/assets/atlases/tiles-${world.id}.json`),
-        loadJson(`/assets/data/stages-${world.id}.json`),
-        loadJson(`/assets/data/stage-render-map-${world.id}.json`),
+        Assets.load(publicAssetUrl(`assets/atlases/tiles-${world.id}.png`)),
+        loadJson(publicAssetUrl(`assets/atlases/tiles-${world.id}.json`)),
+        loadJson(publicAssetUrl(`assets/data/stages-${world.id}.json`)),
+        loadJson(publicAssetUrl(`assets/data/stage-render-map-${world.id}.json`)),
       ]);
 
       return { world, tilesTexture, tilesAtlas, stages, stageRenderMap };

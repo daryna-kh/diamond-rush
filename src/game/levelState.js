@@ -85,6 +85,15 @@ function createEntityState(entity) {
       vanishStartedAt: 0,
     };
   }
+  if (entity.type === "chest-brown") {
+    return {
+      ...baseEntity,
+      contentBlock: entity.blocks,
+      opened: false,
+      opening: false,
+      openStartedAt: 0,
+    };
+  }
   if (entity.type === "snake") {
     const motion = getSnakeMotion(entity);
     return {
@@ -181,6 +190,7 @@ function createPlayerState(stage, playerSpawn, spawnEntity) {
     intro,
     alive: true,
     sprite: null,
+    specialAnimation: null,
   };
 }
 
@@ -215,6 +225,9 @@ function snapshotEntity(entity) {
     vanishStartedAt: 0,
     activated: entity.activated,
     open: entity.open,
+    opened: entity.opened,
+    opening: false,
+    openStartedAt: 0,
     doorAnimation: copyClosedDoorAnimation(entity.doorAnimation),
     playerSupportStartedAt: null,
     snakeAxis: entity.snakeAxis,
@@ -251,6 +264,7 @@ function snapshotPlayer(player, checkpoint) {
     intro: null,
     alive: true,
     hidden: false,
+    specialAnimation: null,
   };
 }
 
@@ -300,6 +314,7 @@ export function createLevelState(stage, classification) {
     collectibles: entities.filter((entity) => entity.type === "diamond"),
     leaves: entities.filter((entity) => entity.type === "leaf"),
     boulders: entities.filter((entity) => entity.type === "boulder"),
+    chests: entities.filter((entity) => entity.type === "chest-brown"),
     checkpoints: entities.filter(
       (entity) =>
         entity.type === "checkpoint" || entity.type === "player-spawn",

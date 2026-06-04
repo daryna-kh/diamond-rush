@@ -14,7 +14,12 @@ export function isPlayerAt(levelState, x, y) {
 }
 
 export function isGravityBlocker(entity) {
-  return entity.type === "leaf" || entity.type === "diamond" || entity.type === "boulder";
+  return (
+    entity.type === "leaf" ||
+    entity.type === "diamond" ||
+    entity.type === "boulder" ||
+    entity.type === "chest-brown"
+  );
 }
 
 export function getActiveEntityOfTypeAt(levelState, type, x, y, ignoredEntity = null) {

@@ -21,7 +21,8 @@ function isDevToolEnabled(tool) {
 async function loadObjectMatcherModule() {
   if (!import.meta.env.DEV) return null;
   try {
-    return await import(/* @vite-ignore */ "/src/tools/objectMatcher/index.js");
+    const moduleUrl = `${import.meta.env.BASE_URL}src/tools/objectMatcher/index.js`;
+    return await import(/* @vite-ignore */ moduleUrl);
   } catch (error) {
     console.warn("Object matcher dev tool is unavailable.", error);
     return null;

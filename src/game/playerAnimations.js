@@ -1,0 +1,28 @@
+export const CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES = [
+  131,
+  132,
+  133,
+  134,
+  135,
+  136,
+  137,
+  138,
+  139,
+  140,
+  17,
+  18,
+  19,
+];
+
+export const CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES = [20, 21, 22, 23, 24];
+export const CHEST_BROWN_REWARD_FRAME_MS = 180;
+export const CHEST_BROWN_REWARD_LOOP_DURATION_MS = 3000;
+export const CHEST_BROWN_REWARD_GEM_FRAME_INDEXES = CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES;
+export const CHEST_BROWN_REWARD_GEM_FRAME_ID = "cm.f#2:module:0:palette:1";
+
+export function getChestBrownRewardDurationMs(frameMs = CHEST_BROWN_REWARD_FRAME_MS) {
+  return (
+    CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES.length * frameMs +
+    CHEST_BROWN_REWARD_LOOP_DURATION_MS
+  );
+}
