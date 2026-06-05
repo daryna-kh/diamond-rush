@@ -22,6 +22,10 @@ const DIAMOND_FRAME_MS = 120;
 const DIAMOND_FRAME_COUNT = 4;
 const DIAMOND_FRAME_PREFIX = "cm.f#2";
 const DIAMOND_PAUSE_MS = 1000;
+const BOULDER_FRAME_PREFIX = "0.f#0";
+const ROLL_PENDING_WOBBLE_CYCLES = 5;
+const ROLL_PENDING_WOBBLE_X = 0.08;
+const ROLL_PENDING_WOBBLE_Y = 0.025;
 
 function createFrameTexture(assets, draw, textureCache) {
   const cacheKey = `${draw.atlas}:${draw.frameId}`;
@@ -81,10 +85,33 @@ function getEntityRenderPosition(entity, now) {
   const progress = hasMove
     ? clamp01((now - entity.moveStartedAt) / duration)
     : 1;
+  const rollOffset = hasMove ? { x: 0, y: 0 } : getRollPendingRenderOffset(entity, now);
 
   return {
-    x: lerp(entity.prevX ?? entity.x, entity.x, progress),
-    y: lerp(entity.prevY ?? entity.y, entity.y, progress),
+    x: lerp(entity.prevX ?? entity.x, entity.x, progress) + rollOffset.x,
+    y: lerp(entity.prevY ?? entity.y, entity.y, progress) + rollOffset.y,
+  };
+}
+
+function getRollPendingRenderOffset(entity, now) {
+  if (
+    !(entity.rollPendingStartedAt > 0) ||
+    !(entity.rollPendingDuration > 0) ||
+    !entity.rollDirectionX
+  ) {
+    return { x: 0, y: 0 };
+  }
+
+  const progress = clamp01(
+    (now - entity.rollPendingStartedAt) / entity.rollPendingDuration,
+  );
+  if (progress >= 1) return { x: 0, y: 0 };
+
+  const wave = Math.sin(progress * Math.PI * 2 * ROLL_PENDING_WOBBLE_CYCLES);
+  const amplitude = 0.35 + progress * 0.65;
+  return {
+    x: entity.rollDirectionX * wave * ROLL_PENDING_WOBBLE_X * amplitude,
+    y: Math.abs(wave) * ROLL_PENDING_WOBBLE_Y * amplitude,
   };
 }
 
@@ -317,6 +344,46 @@ function syncCheckpointSprite(assets, entity, sprite, now) {
   return true;
 }
 
+function getBoulderFrameId(entity, draw) {
+  const match = draw.frameId?.match(
+    /^0\.f#0:(?:module|frame):0:palette:(\d+)$/,
+  );
+  if (!match) return null;
+
+  const palette = Number(match[1]);
+  const frameIndex = Number.isInteger(entity.boulderFrameIndex)
+    ? entity.boulderFrameIndex
+    : 0;
+  return `${BOULDER_FRAME_PREFIX}:frame:${frameIndex}:palette:${palette}`;
+}
+
+function syncBoulderSprite(assets, entity, sprite, now) {
+  if (entity.type !== "boulder") return false;
+
+  const draw = sprite.entityDraw || { dx: 0, dy: 0 };
+  const frameId = getBoulderFrameId(entity, draw);
+  if (!frameId) return false;
+
+  const texture = createAtlasFrameTexture(
+    assets,
+    draw.atlas,
+    frameId,
+    sprite.entityTextureCache,
+  );
+  if (texture && sprite.entityAnimatedFrameId !== frameId) {
+    sprite.texture = texture;
+    sprite.entityAnimatedFrameId = frameId;
+  }
+
+  const { x, y } = getEntityRenderPosition(entity, now);
+  sprite.scale.x = 1;
+  sprite.scale.y = 1;
+  sprite.x = x * TILE_SIZE + draw.dx;
+  sprite.y = y * TILE_SIZE + draw.dy;
+  sprite.visible = entity.active;
+  return true;
+}
+
 function getDiamondFrameId(draw, now) {
   const match = draw.frameId?.match(/^cm\.f#2:frame:0:palette:(\d+)$/);
   if (!match) return null;
@@ -408,6 +475,7 @@ export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
       }
       if (syncChestBrownSprite(assets, entity, sprite, now)) continue;
       if (syncCheckpointSprite(assets, entity, sprite, now)) continue;
+      if (syncBoulderSprite(assets, entity, sprite, now)) continue;
       if (syncDiamondSprite(assets, entity, sprite, now)) continue;
       alignEntitySprite(entity, sprite, now);
       sprite.visible = visible;

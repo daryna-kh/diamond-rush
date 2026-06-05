@@ -1,6 +1,8 @@
 import { getRawCell, getStaticPassability } from "./passability.js";
 import { TICK_MS } from "./simulationTiming.js";
 
+export const ROUND_ENTITY_ROLL_PREPARE_MS = 1000;
+
 export function isInBounds(levelState, x, y) {
   return x >= 0 && y >= 0 && x < levelState.width && y < levelState.height;
 }
@@ -94,6 +96,40 @@ export function getRoundEntityRollTarget(levelState, entity) {
   }
 
   return null;
+}
+
+export function clearPendingRoundEntityRoll(entity) {
+  entity.rollTargetX = null;
+  entity.rollTargetY = null;
+  entity.rollDirectionX = 0;
+  entity.rollPendingStartedAt = 0;
+  entity.rollPendingDuration = 0;
+}
+
+export function startPendingRoundEntityRoll(
+  entity,
+  target,
+  now,
+  duration = ROUND_ENTITY_ROLL_PREPARE_MS,
+) {
+  entity.rollTargetX = target.x;
+  entity.rollTargetY = target.y;
+  entity.rollDirectionX = Math.sign(target.x - entity.x);
+  entity.rollPendingStartedAt = now;
+  entity.rollPendingDuration = duration;
+}
+
+export function isPendingRoundEntityRollTarget(entity, target) {
+  return entity.rollTargetX === target.x && entity.rollTargetY === target.y;
+}
+
+export function isPendingRoundEntityRollReady(entity, target, now) {
+  return (
+    isPendingRoundEntityRollTarget(entity, target) &&
+    entity.rollPendingStartedAt > 0 &&
+    entity.rollPendingDuration > 0 &&
+    now - entity.rollPendingStartedAt >= entity.rollPendingDuration
+  );
 }
 
 function clamp01(value) {

@@ -14,7 +14,7 @@ function findStage(assets, worldId, stageId) {
 
 export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}) {
   let mode = "game";
-  let zoom = 1;
+  let zoom = 1.5;
   let unknownHighlightEnabled = false;
   let dynamicHighlightEnabled = false;
   let worldId = initialWorldId;
