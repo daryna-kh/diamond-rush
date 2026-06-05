@@ -1,12 +1,12 @@
 import { Container } from "pixi.js";
 import { createDynamicEntityOverlay } from "../dev/dynamicEntityOverlay.js";
-import { createEntityLayers, syncLevelStateSprites } from "../game/entityRenderer.js";
 import { createLevelState } from "../game/levelState.js";
 import { createPlayerSprite } from "../game/playerSprite.js";
 import { classifyStage } from "../game/stageClassification.js";
 import { createGameSimulation } from "../simulation/GameSimulation.js";
+import { createEntityLayers, syncLevelStateSprites } from "./entities/entityRenderer.js";
 import { fitStageToScreen } from "./layout.js";
-import { renderStage } from "./StageRenderer.js";
+import { renderStage, syncStageAnimations } from "./StageRenderer.js";
 
 function findStage(assets, worldId, stageId) {
   return assets.stages[worldId]?.stages.find((stage) => stage.id === stageId) || null;
@@ -14,7 +14,7 @@ function findStage(assets, worldId, stageId) {
 
 export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}) {
   let mode = "game";
-  let zoom = 1;
+  let zoom = 1.5;
   let unknownHighlightEnabled = false;
   let dynamicHighlightEnabled = false;
   let worldId = initialWorldId;
@@ -170,11 +170,13 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     },
     tick(input, now = Date.now()) {
       const result = stageRoot.simulation.tick(input, now);
+      syncStageAnimations(stageRoot.stageLayers.staticLayer, assets, now);
       syncLevelStateSprites(assets, stageRoot.levelState, now);
       emitSceneChange();
       return result;
     },
     update(now = Date.now()) {
+      syncStageAnimations(stageRoot.stageLayers.staticLayer, assets, now);
       syncLevelStateSprites(assets, stageRoot.levelState, now);
     },
   };

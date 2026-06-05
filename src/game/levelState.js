@@ -67,6 +67,11 @@ function createEntityState(entity) {
       collected: false,
       falling: false,
       disappearAfterMove: false,
+      rollTargetX: null,
+      rollTargetY: null,
+      rollDirectionX: 0,
+      rollPendingStartedAt: 0,
+      rollPendingDuration: 0,
     };
   }
   if (entity.type === "boulder") {
@@ -74,7 +79,13 @@ function createEntityState(entity) {
       ...baseEntity,
       moved: false,
       falling: false,
+      boulderFrameIndex: 0,
       playerSupportStartedAt: null,
+      rollTargetX: null,
+      rollTargetY: null,
+      rollDirectionX: 0,
+      rollPendingStartedAt: 0,
+      rollPendingDuration: 0,
     };
   }
   if (entity.type === "leaf") {
@@ -228,6 +239,12 @@ function snapshotEntity(entity) {
     opened: entity.opened,
     opening: false,
     openStartedAt: 0,
+    boulderFrameIndex: entity.boulderFrameIndex,
+    rollTargetX: null,
+    rollTargetY: null,
+    rollDirectionX: 0,
+    rollPendingStartedAt: 0,
+    rollPendingDuration: 0,
     doorAnimation: copyClosedDoorAnimation(entity.doorAnimation),
     playerSupportStartedAt: null,
     snakeAxis: entity.snakeAxis,

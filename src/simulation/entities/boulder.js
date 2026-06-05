@@ -1,35 +1,30 @@
 import {
+  clearPendingRoundEntityRoll,
   getActiveEntityOfTypeAt,
   getGravityBlockerAt,
-  isGravityCellFree,
+  getRoundEntityRollTarget,
+  isPendingRoundEntityRollReady,
+  isPendingRoundEntityRollTarget,
   isStaticPassable,
   isPlayerAt,
   setEntityMove,
+  startPendingRoundEntityRoll,
 } from "../simulationGrid.js";
 
 const PLAYER_BOULDER_HOLD_MS = 3000;
+const BOULDER_FRAME_COUNT = 8;
 
-function isRoundSupport(entity) {
-  return entity?.type === "boulder" || entity?.type === "diamond";
-}
-
-function getBoulderRollTarget(levelState, boulder) {
-  const support = getGravityBlockerAt(levelState, boulder.x, boulder.y + 1, boulder);
-  if (!isRoundSupport(support)) return null;
-
-  for (const dx of [-1, 1]) {
-    const sideX = boulder.x + dx;
-    const sideY = boulder.y;
-    const diagonalY = boulder.y + 1;
-    if (
-      isGravityCellFree(levelState, sideX, sideY, boulder) &&
-      isGravityCellFree(levelState, sideX, diagonalY, boulder)
-    ) {
-      return { x: sideX, y: diagonalY };
-    }
+function setBoulderMove(boulder, targetX, targetY, now) {
+  const dx = targetX - boulder.x;
+  if (dx !== 0) {
+    const currentFrame = boulder.boulderFrameIndex || 0;
+    boulder.boulderFrameIndex =
+      dx > 0
+        ? (currentFrame + 1) % BOULDER_FRAME_COUNT
+        : (currentFrame + BOULDER_FRAME_COUNT - 1) % BOULDER_FRAME_COUNT;
   }
 
-  return null;
+  setEntityMove(boulder, targetX, targetY, now);
 }
 
 function isHorizontalPushCellFree(levelState, boulder, x, y) {
@@ -72,7 +67,8 @@ export function applyBoulderPush(levelState, boulder, dx, now) {
 
   boulder.moved = true;
   boulder.playerSupportStartedAt = null;
-  setEntityMove(boulder, target.x, target.y, now);
+  clearPendingRoundEntityRoll(boulder);
+  setBoulderMove(boulder, target.x, target.y, now);
   return {
     moved: true,
     entity: boulder,
@@ -86,6 +82,7 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
   const targetY = boulder.y + 1;
 
   if (isPlayerAt(levelState, targetX, targetY)) {
+    clearPendingRoundEntityRoll(boulder);
     if (boulder.falling) {
       boulder.playerSupportStartedAt = null;
       return { moved: false, entity: boulder, kind: "falling-player-crush", playerRespawn: true };
@@ -103,30 +100,42 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
 
   const snake = getActiveEntityOfTypeAt(levelState, "snake", targetX, targetY);
   if (snake) {
+    clearPendingRoundEntityRoll(boulder);
     snake.active = false;
     snake.killed = true;
     boulder.falling = true;
-    setEntityMove(boulder, targetX, targetY, now);
+    setBoulderMove(boulder, targetX, targetY, now);
     return { moved: true, entity: boulder, kind: "snake-crush", killed: [snake] };
   }
 
   const fallTarget = helpers.getEntityFallTarget(levelState, boulder, targetX, targetY);
 
   if (fallTarget.canFall) {
+    clearPendingRoundEntityRoll(boulder);
     boulder.falling = true;
     boulder.playerSupportStartedAt = null;
-    setEntityMove(boulder, targetX, targetY, now);
+    setBoulderMove(boulder, targetX, targetY, now);
     return { moved: true, entity: boulder, kind: "fall" };
   }
 
-  const rollTarget = getBoulderRollTarget(levelState, boulder);
+  const rollTarget = getRoundEntityRollTarget(levelState, boulder);
   if (rollTarget) {
+    if (!isPendingRoundEntityRollReady(boulder, rollTarget, now)) {
+      if (!isPendingRoundEntityRollTarget(boulder, rollTarget)) {
+        startPendingRoundEntityRoll(boulder, rollTarget, now);
+      }
+      boulder.falling = false;
+      return { moved: false, entity: boulder, kind: "roll-pending" };
+    }
+
+    clearPendingRoundEntityRoll(boulder);
     boulder.falling = true;
     boulder.playerSupportStartedAt = null;
-    setEntityMove(boulder, rollTarget.x, rollTarget.y, now);
+    setBoulderMove(boulder, rollTarget.x, rollTarget.y, now);
     return { moved: true, entity: boulder, kind: "roll" };
   }
 
+  clearPendingRoundEntityRoll(boulder);
   boulder.falling = false;
   return { moved: false, entity: boulder, kind: null };
 }

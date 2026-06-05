@@ -3,6 +3,10 @@ import {
   saveCheckpointSnapshot,
 } from "../game/levelState.js";
 import {
+  CHEST_BROWN_OPEN_DURATION_MS,
+  LEAF_VANISH_DURATION_MS,
+} from "../game/entityAnimations.js";
+import {
   CHEST_BROWN_REWARD_FRAME_MS,
   CHEST_BROWN_REWARD_LOOP_DURATION_MS,
   CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
@@ -10,13 +14,14 @@ import {
   getChestBrownRewardDurationMs,
 } from "../game/playerAnimations.js";
 import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
+import { activateCheckpoints } from "./entities/checkpoints.js";
+import { applyDiamondGravity } from "./entities/diamonds.js";
 import { applyFireSpitters } from "./entities/fireSpitters.js";
 import { applySnakeMovement } from "./entities/snakes.js";
 import {
   getActiveEntitiesAt,
   getEntityFallTarget,
   getStaticCellPassability,
-  setEntityMove,
 } from "./simulationGrid.js";
 import { TICK_MS } from "./simulationTiming.js";
 
@@ -111,17 +116,6 @@ function vanishLeaves(entities, now) {
     vanishing.push(entity);
   }
   return vanishing;
-}
-
-function activateCheckpoints(entities) {
-  let activatedCheckpoint = null;
-  for (const entity of entities) {
-    if (entity.type === "checkpoint" || entity.type === "player-spawn") {
-      entity.activated = true;
-      activatedCheckpoint = entity;
-    }
-  }
-  return activatedCheckpoint;
 }
 
 function isPlayerSpecialAnimationActive(player, now) {
@@ -257,21 +251,74 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
       continue;
     }
 
-    const targetX = entity.x;
-    const targetY = entity.y + 1;
-    const target = getEntityFallTarget(levelState, entity, targetX, targetY);
-    if (!target.canFall) {
-      entity.falling = false;
-      continue;
-    }
-
-    entity.falling = true;
-    setEntityMove(entity, targetX, targetY, now);
-    if (target.hitPlayer) entity.disappearAfterMove = true;
-    moved.push(entity);
+    const result = applyDiamondGravity(levelState, entity, now, {
+      getEntityFallTarget,
+    });
+    if (result.moved) moved.push(entity);
   }
 
   return { moved, playerRespawned: false, respawnReason: null };
+}
+
+function isMoveComplete(entity, now) {
+  return (
+    entity.moveStartedAt > 0 &&
+    entity.moveDuration > 0 &&
+    now - entity.moveStartedAt >= entity.moveDuration
+  );
+}
+
+function completeEntityMove(entity) {
+  entity.prevX = entity.x;
+  entity.prevY = entity.y;
+  entity.renderX = entity.x;
+  entity.renderY = entity.y;
+  entity.moveStartedAt = 0;
+  entity.moveDuration = 0;
+}
+
+function advanceEntityLifecycle(levelState, now) {
+  const result = {
+    disappearedAfterMove: [],
+    vanishedLeaves: [],
+    completedChestOpenings: [],
+  };
+
+  for (const entity of levelState.entities) {
+    if (isMoveComplete(entity, now)) completeEntityMove(entity);
+
+    if (entity.disappearAfterMove && entity.moveStartedAt === 0) {
+      entity.active = false;
+      entity.collected = true;
+      entity.falling = false;
+      entity.disappearAfterMove = false;
+      result.disappearedAfterMove.push(entity);
+    }
+
+    if (
+      entity.type === "leaf" &&
+      entity.active &&
+      entity.vanishing &&
+      !entity.vanished &&
+      now - entity.vanishStartedAt >= LEAF_VANISH_DURATION_MS
+    ) {
+      entity.active = false;
+      entity.vanishing = false;
+      entity.vanished = true;
+      result.vanishedLeaves.push(entity);
+    }
+
+    if (
+      entity.type === "chest-brown" &&
+      entity.opening &&
+      now - entity.openStartedAt >= CHEST_BROWN_OPEN_DURATION_MS
+    ) {
+      entity.opening = false;
+      result.completedChestOpenings.push(entity);
+    }
+  }
+
+  return result;
 }
 
 export function createGameSimulation(levelState) {
@@ -297,10 +344,12 @@ export function createGameSimulation(levelState) {
         snakes: [],
         playerDamageEvents: [],
         openedChests: [],
+        lifecycle: null,
         playerRespawned: false,
         respawnReason: null,
       };
 
+      result.lifecycle = advanceEntityLifecycle(levelState, now);
       levelState.player.moving = false;
       if (levelState.player.intro?.active) return result;
       if (isPlayerSpecialAnimationActive(levelState.player, now)) return result;
