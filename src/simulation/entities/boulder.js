@@ -1,36 +1,13 @@
 import {
   getActiveEntityOfTypeAt,
   getGravityBlockerAt,
-  isGravityCellFree,
+  getRoundEntityRollTarget,
   isStaticPassable,
   isPlayerAt,
   setEntityMove,
 } from "../simulationGrid.js";
 
 const PLAYER_BOULDER_HOLD_MS = 3000;
-
-function isRoundSupport(entity) {
-  return entity?.type === "boulder" || entity?.type === "diamond";
-}
-
-function getBoulderRollTarget(levelState, boulder) {
-  const support = getGravityBlockerAt(levelState, boulder.x, boulder.y + 1, boulder);
-  if (!isRoundSupport(support)) return null;
-
-  for (const dx of [-1, 1]) {
-    const sideX = boulder.x + dx;
-    const sideY = boulder.y;
-    const diagonalY = boulder.y + 1;
-    if (
-      isGravityCellFree(levelState, sideX, sideY, boulder) &&
-      isGravityCellFree(levelState, sideX, diagonalY, boulder)
-    ) {
-      return { x: sideX, y: diagonalY };
-    }
-  }
-
-  return null;
-}
 
 function isHorizontalPushCellFree(levelState, boulder, x, y) {
   return (
@@ -119,7 +96,7 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
     return { moved: true, entity: boulder, kind: "fall" };
   }
 
-  const rollTarget = getBoulderRollTarget(levelState, boulder);
+  const rollTarget = getRoundEntityRollTarget(levelState, boulder);
   if (rollTarget) {
     boulder.falling = true;
     boulder.playerSupportStartedAt = null;

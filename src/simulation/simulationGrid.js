@@ -45,6 +45,10 @@ export function getGravityBlockerAt(levelState, x, y, ignoredEntity = null) {
   ) || null;
 }
 
+export function isRoundGravitySupport(entity) {
+  return entity?.type === "boulder" || entity?.type === "diamond";
+}
+
 export function isGravityCellFree(levelState, x, y, ignoredEntity = null) {
   return (
     isStaticPassable(levelState, x, y) &&
@@ -71,6 +75,25 @@ export function getEntityFallTarget(levelState, entity, x, y) {
     canFall: isStaticPassable(levelState, x, y),
     hitPlayer: false,
   };
+}
+
+export function getRoundEntityRollTarget(levelState, entity) {
+  const support = getGravityBlockerAt(levelState, entity.x, entity.y + 1, entity);
+  if (!isRoundGravitySupport(support)) return null;
+
+  for (const dx of [-1, 1]) {
+    const sideX = entity.x + dx;
+    const sideY = entity.y;
+    const diagonalY = entity.y + 1;
+    if (
+      isGravityCellFree(levelState, sideX, sideY, entity) &&
+      isGravityCellFree(levelState, sideX, diagonalY, entity)
+    ) {
+      return { x: sideX, y: diagonalY };
+    }
+  }
+
+  return null;
 }
 
 function clamp01(value) {

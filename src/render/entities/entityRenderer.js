@@ -14,6 +14,15 @@ import {
   FIRE_SPITTER_FRAME_MS,
 } from "../../simulation/entities/fireSpitters.js";
 
+const CHECKPOINT_FRAME_MS = 120;
+const CHECKPOINT_FRAME_COUNT = 8;
+const CHECKPOINT_FRAME_PREFIX = "cm.f#6";
+const CHECKPOINT_IDLE_FRAME_ID = `${CHECKPOINT_FRAME_PREFIX}:frame:0:palette:0`;
+const DIAMOND_FRAME_MS = 120;
+const DIAMOND_FRAME_COUNT = 4;
+const DIAMOND_FRAME_PREFIX = "cm.f#2";
+const DIAMOND_PAUSE_MS = 1000;
+
 function createFrameTexture(assets, draw, textureCache) {
   const cacheKey = `${draw.atlas}:${draw.frameId}`;
   if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
@@ -274,6 +283,82 @@ function syncChestBrownSprite(assets, entity, sprite, now) {
   return true;
 }
 
+function getCheckpointFrameId(entity, now) {
+  if (entity.activated) return CHECKPOINT_IDLE_FRAME_ID;
+  const frameIndex =
+    Math.floor(now / CHECKPOINT_FRAME_MS) % CHECKPOINT_FRAME_COUNT;
+  return `${CHECKPOINT_FRAME_PREFIX}:frame:${frameIndex}:palette:0`;
+}
+
+function syncCheckpointSprite(assets, entity, sprite, now) {
+  if (entity.type !== "checkpoint") return false;
+
+  const draw = sprite.entityDraw || { dx: 0, dy: 0 };
+  if (draw.asset !== "checkpoint") return false;
+
+  const frameId = getCheckpointFrameId(entity, now);
+  const texture = createAtlasFrameTexture(
+    assets,
+    draw.atlas,
+    frameId,
+    sprite.entityTextureCache,
+  );
+  if (texture && sprite.entityAnimatedFrameId !== frameId) {
+    sprite.texture = texture;
+    sprite.entityAnimatedFrameId = frameId;
+  }
+
+  const { x, y } = getEntityRenderPosition(entity, now);
+  sprite.scale.x = 1;
+  sprite.scale.y = 1;
+  sprite.x = x * TILE_SIZE + draw.dx;
+  sprite.y = y * TILE_SIZE + draw.dy;
+  sprite.visible = entity.active;
+  return true;
+}
+
+function getDiamondFrameId(draw, now) {
+  const match = draw.frameId?.match(/^cm\.f#2:frame:0:palette:(\d+)$/);
+  if (!match) return null;
+
+  const palette = Number(match[1]);
+  const animationDuration = DIAMOND_FRAME_MS * DIAMOND_FRAME_COUNT;
+  const cycleDuration = animationDuration + DIAMOND_PAUSE_MS;
+  const cycleTime = now % cycleDuration;
+  const frameIndex =
+    cycleTime < animationDuration
+      ? Math.floor(cycleTime / DIAMOND_FRAME_MS)
+      : 0;
+  return `${DIAMOND_FRAME_PREFIX}:frame:${frameIndex}:palette:${palette}`;
+}
+
+function syncDiamondSprite(assets, entity, sprite, now) {
+  if (entity.type !== "diamond") return false;
+
+  const draw = sprite.entityDraw || { dx: 0, dy: 0 };
+  const frameId = getDiamondFrameId(draw, now);
+  if (!frameId) return false;
+
+  const texture = createAtlasFrameTexture(
+    assets,
+    draw.atlas,
+    frameId,
+    sprite.entityTextureCache,
+  );
+  if (texture && sprite.entityAnimatedFrameId !== frameId) {
+    sprite.texture = texture;
+    sprite.entityAnimatedFrameId = frameId;
+  }
+
+  const { x, y } = getEntityRenderPosition(entity, now);
+  sprite.scale.x = 1;
+  sprite.scale.y = 1;
+  sprite.x = x * TILE_SIZE + draw.dx;
+  sprite.y = y * TILE_SIZE + draw.dy;
+  sprite.visible = entity.active && !entity.collected;
+  return true;
+}
+
 function alignEntitySprite(entity, sprite, now) {
   const draw = sprite.entityDraw || { dx: 0, dy: 0 };
   const { x, y } = getEntityRenderPosition(entity, now);
@@ -322,6 +407,8 @@ export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
         continue;
       }
       if (syncChestBrownSprite(assets, entity, sprite, now)) continue;
+      if (syncCheckpointSprite(assets, entity, sprite, now)) continue;
+      if (syncDiamondSprite(assets, entity, sprite, now)) continue;
       alignEntitySprite(entity, sprite, now);
       sprite.visible = visible;
     }

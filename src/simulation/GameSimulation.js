@@ -14,13 +14,14 @@ import {
   getChestBrownRewardDurationMs,
 } from "../game/playerAnimations.js";
 import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
+import { activateCheckpoints } from "./entities/checkpoints.js";
+import { applyDiamondGravity } from "./entities/diamonds.js";
 import { applyFireSpitters } from "./entities/fireSpitters.js";
 import { applySnakeMovement } from "./entities/snakes.js";
 import {
   getActiveEntitiesAt,
   getEntityFallTarget,
   getStaticCellPassability,
-  setEntityMove,
 } from "./simulationGrid.js";
 import { TICK_MS } from "./simulationTiming.js";
 
@@ -115,17 +116,6 @@ function vanishLeaves(entities, now) {
     vanishing.push(entity);
   }
   return vanishing;
-}
-
-function activateCheckpoints(entities) {
-  let activatedCheckpoint = null;
-  for (const entity of entities) {
-    if (entity.type === "checkpoint" || entity.type === "player-spawn") {
-      entity.activated = true;
-      activatedCheckpoint = entity;
-    }
-  }
-  return activatedCheckpoint;
 }
 
 function isPlayerSpecialAnimationActive(player, now) {
@@ -261,18 +251,10 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
       continue;
     }
 
-    const targetX = entity.x;
-    const targetY = entity.y + 1;
-    const target = getEntityFallTarget(levelState, entity, targetX, targetY);
-    if (!target.canFall) {
-      entity.falling = false;
-      continue;
-    }
-
-    entity.falling = true;
-    setEntityMove(entity, targetX, targetY, now);
-    if (target.hitPlayer) entity.disappearAfterMove = true;
-    moved.push(entity);
+    const result = applyDiamondGravity(levelState, entity, now, {
+      getEntityFallTarget,
+    });
+    if (result.moved) moved.push(entity);
   }
 
   return { moved, playerRespawned: false, respawnReason: null };
