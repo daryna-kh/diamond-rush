@@ -1,10 +1,10 @@
 import { Container } from "pixi.js";
 import { createDynamicEntityOverlay } from "../dev/dynamicEntityOverlay.js";
-import { createEntityLayers, syncLevelStateSprites } from "../game/entityRenderer.js";
 import { createLevelState } from "../game/levelState.js";
 import { createPlayerSprite } from "../game/playerSprite.js";
 import { classifyStage } from "../game/stageClassification.js";
 import { createGameSimulation } from "../simulation/GameSimulation.js";
+import { createEntityLayers, syncLevelStateSprites } from "./entities/entityRenderer.js";
 import { fitStageToScreen } from "./layout.js";
 import { renderStage } from "./StageRenderer.js";
 

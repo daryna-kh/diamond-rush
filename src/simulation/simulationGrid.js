@@ -73,9 +73,31 @@ export function getEntityFallTarget(levelState, entity, x, y) {
   };
 }
 
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function lerp(from, to, progress) {
+  return from + (to - from) * progress;
+}
+
+function getEntityMoveRenderPosition(entity, now) {
+  const duration = entity.moveDuration || 0;
+  const hasMove = duration > 0 && entity.moveStartedAt > 0;
+  const progress = hasMove ? clamp01((now - entity.moveStartedAt) / duration) : 1;
+
+  return {
+    x: lerp(entity.prevX ?? entity.x, entity.x, progress),
+    y: lerp(entity.prevY ?? entity.y, entity.y, progress),
+  };
+}
+
 export function setEntityMove(entity, targetX, targetY, now, duration = TICK_MS) {
-  entity.prevX = entity.renderX ?? entity.x;
-  entity.prevY = entity.renderY ?? entity.y;
+  const renderPosition = getEntityMoveRenderPosition(entity, now);
+  entity.prevX = renderPosition.x;
+  entity.prevY = renderPosition.y;
+  entity.renderX = renderPosition.x;
+  entity.renderY = renderPosition.y;
   entity.x = targetX;
   entity.y = targetY;
   entity.moveStartedAt = now;

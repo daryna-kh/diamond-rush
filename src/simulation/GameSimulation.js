@@ -3,6 +3,10 @@ import {
   saveCheckpointSnapshot,
 } from "../game/levelState.js";
 import {
+  CHEST_BROWN_OPEN_DURATION_MS,
+  LEAF_VANISH_DURATION_MS,
+} from "../game/entityAnimations.js";
+import {
   CHEST_BROWN_REWARD_FRAME_MS,
   CHEST_BROWN_REWARD_LOOP_DURATION_MS,
   CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
@@ -274,6 +278,67 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
   return { moved, playerRespawned: false, respawnReason: null };
 }
 
+function isMoveComplete(entity, now) {
+  return (
+    entity.moveStartedAt > 0 &&
+    entity.moveDuration > 0 &&
+    now - entity.moveStartedAt >= entity.moveDuration
+  );
+}
+
+function completeEntityMove(entity) {
+  entity.prevX = entity.x;
+  entity.prevY = entity.y;
+  entity.renderX = entity.x;
+  entity.renderY = entity.y;
+  entity.moveStartedAt = 0;
+  entity.moveDuration = 0;
+}
+
+function advanceEntityLifecycle(levelState, now) {
+  const result = {
+    disappearedAfterMove: [],
+    vanishedLeaves: [],
+    completedChestOpenings: [],
+  };
+
+  for (const entity of levelState.entities) {
+    if (isMoveComplete(entity, now)) completeEntityMove(entity);
+
+    if (entity.disappearAfterMove && entity.moveStartedAt === 0) {
+      entity.active = false;
+      entity.collected = true;
+      entity.falling = false;
+      entity.disappearAfterMove = false;
+      result.disappearedAfterMove.push(entity);
+    }
+
+    if (
+      entity.type === "leaf" &&
+      entity.active &&
+      entity.vanishing &&
+      !entity.vanished &&
+      now - entity.vanishStartedAt >= LEAF_VANISH_DURATION_MS
+    ) {
+      entity.active = false;
+      entity.vanishing = false;
+      entity.vanished = true;
+      result.vanishedLeaves.push(entity);
+    }
+
+    if (
+      entity.type === "chest-brown" &&
+      entity.opening &&
+      now - entity.openStartedAt >= CHEST_BROWN_OPEN_DURATION_MS
+    ) {
+      entity.opening = false;
+      result.completedChestOpenings.push(entity);
+    }
+  }
+
+  return result;
+}
+
 export function createGameSimulation(levelState) {
   let tickCount = 0;
 
@@ -297,10 +362,12 @@ export function createGameSimulation(levelState) {
         snakes: [],
         playerDamageEvents: [],
         openedChests: [],
+        lifecycle: null,
         playerRespawned: false,
         respawnReason: null,
       };
 
+      result.lifecycle = advanceEntityLifecycle(levelState, now);
       levelState.player.moving = false;
       if (levelState.player.intro?.active) return result;
       if (isPlayerSpecialAnimationActive(levelState.player, now)) return result;
