@@ -11,6 +11,10 @@ import {
   CHEST_BROWN_REWARD_LOOP_DURATION_MS,
   CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
   CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES,
+  DIAMOND_COLLECT_FRAME_MS,
+  DIAMOND_COLLECT_PLAYER_FRAME_INDEXES,
+  DIAMOND_COLLECT_PLAYER_FRAME_PREFIX,
+  getDiamondCollectDurationMs,
   getChestBrownRewardDurationMs,
 } from "../game/playerAnimations.js";
 import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
@@ -95,7 +99,7 @@ function getTargetInfo(levelState, x, y) {
   return { passable: true, reason: null, entities };
 }
 
-function collectDiamonds(levelState, entities) {
+function collectDiamonds(levelState, entities, now) {
   const collected = [];
   for (const entity of entities) {
     if (entity.type !== "diamond" || entity.collected) continue;
@@ -103,6 +107,9 @@ function collectDiamonds(levelState, entities) {
     entity.active = false;
     levelState.collectedDiamonds += 1;
     collected.push(entity);
+  }
+  if (collected.length > 0) {
+    startDiamondCollectAnimation(levelState.player, now);
   }
   return collected;
 }
@@ -125,10 +132,12 @@ function isPlayerSpecialAnimationActive(player, now) {
   const duration =
     animation.durationMs ||
     getChestBrownRewardDurationMs(animation.frameMs || CHEST_BROWN_REWARD_FRAME_MS);
-  if (duration <= 0 || now - animation.startedAt < duration) return true;
+  if (duration > 0 && now - animation.startedAt >= duration) {
+    animation.active = false;
+    return false;
+  }
 
-  animation.active = false;
-  return false;
+  return animation.blocksSimulation !== false;
 }
 
 function startChestBrownRewardAnimation(player, chest, now) {
@@ -142,8 +151,24 @@ function startChestBrownRewardAnimation(player, chest, now) {
     loopFrameIndexes: CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
     loopDurationMs: CHEST_BROWN_REWARD_LOOP_DURATION_MS,
     durationMs: getChestBrownRewardDurationMs(CHEST_BROWN_REWARD_FRAME_MS),
+    blocksSimulation: true,
   };
   player.walkFrame = 0;
+}
+
+function startDiamondCollectAnimation(player, now) {
+  player.specialAnimation = {
+    type: "diamond-collect",
+    active: true,
+    startedAt: now,
+    framePrefix: DIAMOND_COLLECT_PLAYER_FRAME_PREFIX,
+    frameMs: DIAMOND_COLLECT_FRAME_MS,
+    frameIndexes: DIAMOND_COLLECT_PLAYER_FRAME_INDEXES,
+    loopFrameIndexes: [],
+    loopDurationMs: 0,
+    durationMs: getDiamondCollectDurationMs(DIAMOND_COLLECT_FRAME_MS),
+    blocksSimulation: false,
+  };
 }
 
 function openBrownChests(levelState, entities, now) {
@@ -351,6 +376,7 @@ export function createGameSimulation(levelState) {
 
       result.lifecycle = advanceEntityLifecycle(levelState, now);
       levelState.player.moving = false;
+      levelState.player.pushing = false;
       if (levelState.player.intro?.active) return result;
       if (isPlayerSpecialAnimationActive(levelState.player, now)) return result;
 
@@ -367,6 +393,7 @@ export function createGameSimulation(levelState) {
           if (!target.passable) {
             const pushResult = tryPushBoulder(levelState, target, intent, now);
             if (pushResult.pushed) {
+              levelState.player.pushing = true;
               setPlayerMove(levelState.player, targetX, targetY, now);
               gravitySkippedEntities.add(pushResult.entity);
               for (const pushedEntity of pushResult.pushedEntities) {
@@ -378,7 +405,7 @@ export function createGameSimulation(levelState) {
               result.blockedReason = target.reason;
             }
           } else {
-            result.collected = collectDiamonds(levelState, target.entities);
+            result.collected = collectDiamonds(levelState, target.entities, now);
             result.vanishing = vanishLeaves(target.entities, now);
             setPlayerMove(levelState.player, targetX, targetY, now);
             result.openedChests = openBrownChests(levelState, target.entities, now);

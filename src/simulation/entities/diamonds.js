@@ -3,6 +3,7 @@ import {
   getRoundEntityRollTarget,
   isPendingRoundEntityRollReady,
   isPendingRoundEntityRollTarget,
+  ROUND_ENTITY_FALL_MOVE_MS,
   setEntityMove,
   startPendingRoundEntityRoll,
 } from "../simulationGrid.js";
@@ -19,7 +20,7 @@ export function applyDiamondGravity(levelState, diamond, now, helpers) {
   if (fallTarget.canFall) {
     clearPendingRoundEntityRoll(diamond);
     diamond.falling = true;
-    setEntityMove(diamond, targetX, targetY, now);
+    setEntityMove(diamond, targetX, targetY, now, ROUND_ENTITY_FALL_MOVE_MS);
     if (fallTarget.hitPlayer) diamond.disappearAfterMove = true;
     return { moved: true, entity: diamond, kind: "fall" };
   }
