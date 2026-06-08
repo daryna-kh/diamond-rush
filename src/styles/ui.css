@@ -30,6 +30,21 @@
   background: rgba(28, 38, 41, 0.94);
 }
 
+.game-hud {
+  position: fixed;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  z-index: 10;
+  border: 1px solid rgba(232, 240, 242, 0.28);
+  border-radius: 6px;
+  background: rgba(17, 23, 25, 0.88);
+  color: #e8f0f2;
+  font: 14px Arial, sans-serif;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
 .dev-picker {
   position: fixed;
   left: 16px;

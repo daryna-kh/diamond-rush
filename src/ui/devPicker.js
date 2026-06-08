@@ -150,6 +150,19 @@ export function createDevPicker({
 
   return {
     element: wrapper,
+    setSelection(nextWorldId, nextStageId) {
+      if (currentWorldId !== nextWorldId) {
+        currentWorldId = nextWorldId;
+        worldSelect.value = currentWorldId;
+        fillStageOptions(
+          stageSelect,
+          stagesByWorld[currentWorldId].stages,
+          stageMetadata,
+          currentWorldId,
+        );
+      }
+      stageSelect.value = String(nextStageId);
+    },
     setMode(mode) {
       wrapper.hidden = mode !== "dev";
     },

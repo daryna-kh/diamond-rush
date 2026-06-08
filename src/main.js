@@ -9,6 +9,7 @@ import { TICK_MS } from "./simulation/GameSimulation.js";
 import "./styles/ui.css";
 import { createStatusPanel, textStyle } from "./ui/debugStatus.js";
 import { createDevPicker } from "./ui/devPicker.js";
+import { createGameHud } from "./ui/gameHud.js";
 import { createModeSwitch, getMode } from "./utils/modes.js";
 
 function isDevToolEnabled(tool) {
@@ -89,8 +90,12 @@ async function main() {
       initialSceneState.stageRoot,
     );
     statusPanel.setMode(mode);
+    const gameHud = createGameHud(initialSceneState.stageRoot);
+    let devPicker = null;
     scene.onSceneChange(({ worldId, stage, stageRoot }) => {
       statusPanel.updateScene(worldId, stage, stageRoot);
+      gameHud.updateScene(stageRoot);
+      devPicker?.setSelection(worldId, stage.id);
       globalThis.__diamondRushStage = stageRoot;
       globalThis.__diamondRushWorld = worldId;
       globalThis.__diamondRushLevelState = stageRoot.levelState;
@@ -111,7 +116,7 @@ async function main() {
       onInspect: (cell) => statusPanel.updateCell(cell),
     });
 
-    const devPicker = createDevPicker({
+    devPicker = createDevPicker({
       worlds: assets.worlds,
       stagesByWorld: assets.stages,
       stageMetadata: assets.stageMetadata,

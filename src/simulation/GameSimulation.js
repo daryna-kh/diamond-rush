@@ -37,6 +37,7 @@ const DIRECTIONS = {
   up: { dx: 0, dy: -1, direction: "up" },
   down: { dx: 0, dy: 1, direction: "down" },
 };
+const PLAYER_DAMAGE_INVULNERABLE_MS = 700;
 
 function normalizeInput(input) {
   if (!input) return null;
@@ -114,6 +115,101 @@ function collectDiamonds(levelState, entities, now) {
   return collected;
 }
 
+function unlockGemLocks(levelState) {
+  const unlocked = [];
+  for (const lock of levelState.gemLocks) {
+    if (
+      lock.type !== "gem-lock" ||
+      lock.unlocked ||
+      levelState.collectedDiamonds < lock.requiredDiamonds
+    ) {
+      continue;
+    }
+
+    lock.unlocked = true;
+    lock.active = false;
+    unlocked.push(lock);
+  }
+  return unlocked;
+}
+
+function completeExit(levelState, entities) {
+  if (levelState.completedStage) return null;
+  const exit = entities.find(
+    (entity) =>
+      (entity.type === "exit" || entity.type === "secret-exit") &&
+      entity.active,
+  );
+  if (!exit) return null;
+
+  levelState.completedStage = true;
+  levelState.completedExit = {
+    id: exit.id,
+    x: exit.x,
+    y: exit.y,
+    secret: exit.type === "secret-exit",
+  };
+  return exit;
+}
+
+function respawnPlayer(levelState, now, reason) {
+  const nextLives = levelState.player.lives - 1;
+  if (nextLives < 0) {
+    levelState.player.lives = 0;
+    levelState.player.health = 0;
+    levelState.player.alive = false;
+    levelState.player.gameOver = true;
+    return {
+      playerRespawned: false,
+      gameOver: true,
+      reason,
+    };
+  }
+
+  restoreCheckpointSnapshot(levelState);
+  levelState.player.lives = nextLives;
+  levelState.player.health = levelState.player.maxHealth;
+  levelState.player.alive = true;
+  levelState.player.gameOver = false;
+  levelState.player.invulnerableUntil = now + PLAYER_DAMAGE_INVULNERABLE_MS;
+  return {
+    playerRespawned: true,
+    gameOver: false,
+    reason,
+  };
+}
+
+function damagePlayer(levelState, amount, now, reason, options = {}) {
+  const player = levelState.player;
+  if (player.gameOver || player.alive === false) {
+    return { damaged: false, playerRespawned: false, gameOver: !!player.gameOver, reason };
+  }
+  if (!options.bypassInvulnerability && now < (player.invulnerableUntil || 0)) {
+    return { damaged: false, playerRespawned: false, gameOver: false, reason: "invulnerable" };
+  }
+
+  player.health = Math.max(0, player.health - amount);
+  player.invulnerableUntil = now + PLAYER_DAMAGE_INVULNERABLE_MS;
+  if (player.health > 0) {
+    return { damaged: true, playerRespawned: false, gameOver: false, reason };
+  }
+
+  return {
+    damaged: true,
+    ...respawnPlayer(levelState, now, reason),
+  };
+}
+
+function killPlayer(levelState, now, reason) {
+  return damagePlayer(
+    levelState,
+    levelState.player.health || levelState.player.maxHealth,
+    now,
+    reason,
+    { bypassInvulnerability: true },
+  );
+}
+
 function vanishLeaves(entities, now) {
   const vanishing = [];
   for (const entity of entities) {
@@ -171,8 +267,37 @@ function startDiamondCollectAnimation(player, now) {
   };
 }
 
+function applyChestReward(levelState, chest) {
+  if (chest.contentBlock === 6) {
+    levelState.player.lives += 1;
+    return { type: "one-up", amount: 1, chest };
+  }
+
+  if (chest.contentBlock === 7) {
+    if (levelState.player.health < levelState.player.maxHealth) {
+      const amount = levelState.player.maxHealth - levelState.player.health;
+      levelState.player.health = levelState.player.maxHealth;
+      return { type: "heal", amount, chest };
+    }
+
+    levelState.collectedDiamonds += 10;
+    return { type: "diamond", amount: 10, chest };
+  }
+
+  if (chest.contentBlock === 41) {
+    const amount = Number.isFinite(chest.specifying_data)
+      ? chest.specifying_data
+      : 0;
+    levelState.collectedDiamonds += amount;
+    return { type: "diamond", amount, chest };
+  }
+
+  return null;
+}
+
 function openBrownChests(levelState, entities, now) {
   const opened = [];
+  const rewards = [];
   for (const chest of entities) {
     if (chest.type !== "chest-brown" || chest.opened) continue;
 
@@ -180,9 +305,11 @@ function openBrownChests(levelState, entities, now) {
     chest.opening = true;
     chest.openStartedAt = now;
     startChestBrownRewardAnimation(levelState.player, chest, now);
+    const reward = applyChestReward(levelState, chest);
+    if (reward) rewards.push(reward);
     opened.push(chest);
   }
-  return opened;
+  return { opened, rewards };
 }
 
 function advancePlayerWalkFrame(player) {
@@ -253,6 +380,7 @@ function applySnakes(levelState, now, skippedEntities = new Set()) {
 
 function applyGravity(levelState, now, skippedEntities = new Set()) {
   const moved = [];
+  const playerDamageEvents = [];
   const fallingEntities = levelState.entities
     .filter(
       (entity) =>
@@ -269,8 +397,21 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
         getEntityFallTarget,
       });
       if (result.playerRespawn) {
-        restoreCheckpointSnapshot(levelState);
-        return { moved, playerRespawned: true, respawnReason: result.kind };
+        const damage = killPlayer(levelState, now, result.kind);
+        playerDamageEvents.push({
+          source: "boulder",
+          entity,
+          amount: levelState.player.maxHealth,
+          reason: result.kind,
+          ...damage,
+        });
+        return {
+          moved,
+          playerDamageEvents,
+          playerRespawned: damage.playerRespawned,
+          gameOver: damage.gameOver,
+          respawnReason: result.kind,
+        };
       }
       if (result.moved) moved.push(entity);
       continue;
@@ -282,7 +423,7 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
     if (result.moved) moved.push(entity);
   }
 
-  return { moved, playerRespawned: false, respawnReason: null };
+  return { moved, playerDamageEvents, playerRespawned: false, gameOver: false, respawnReason: null };
 }
 
 function isMoveComplete(entity, now) {
@@ -369,14 +510,24 @@ export function createGameSimulation(levelState) {
         snakes: [],
         playerDamageEvents: [],
         openedChests: [],
+        chestRewards: [],
+        unlockedGemLocks: [],
+        completedExit: null,
         lifecycle: null,
         playerRespawned: false,
+        gameOver: false,
         respawnReason: null,
       };
 
       result.lifecycle = advanceEntityLifecycle(levelState, now);
+      result.unlockedGemLocks.push(...unlockGemLocks(levelState));
       levelState.player.moving = false;
       levelState.player.pushing = false;
+      if (levelState.player.gameOver) {
+        result.gameOver = true;
+        return result;
+      }
+      if (levelState.completedStage) return result;
       if (levelState.player.intro?.active) return result;
       if (isPlayerSpecialAnimationActive(levelState.player, now)) return result;
 
@@ -406,25 +557,46 @@ export function createGameSimulation(levelState) {
             }
           } else {
             result.collected = collectDiamonds(levelState, target.entities, now);
+            result.unlockedGemLocks.push(...unlockGemLocks(levelState));
             result.vanishing = vanishLeaves(target.entities, now);
             setPlayerMove(levelState.player, targetX, targetY, now);
-            result.openedChests = openBrownChests(levelState, target.entities, now);
+            const chests = openBrownChests(levelState, target.entities, now);
+            result.openedChests = chests.opened;
+            result.chestRewards = chests.rewards;
+            if (result.chestRewards.some((reward) => reward.type === "diamond")) {
+              result.unlockedGemLocks.push(...unlockGemLocks(levelState));
+            }
             const activatedCheckpoint = activateCheckpoints(target.entities);
             if (activatedCheckpoint)
               saveCheckpointSnapshot(levelState, activatedCheckpoint);
+            result.completedExit = completeExit(levelState, target.entities);
             result.moved = true;
           }
         }
       }
 
+      if (result.completedExit) return result;
+
       const snakes = applySnakes(levelState, now, gravitySkippedEntities);
       result.snakes = snakes.moved;
-      result.playerDamageEvents = snakes.playerDamageEvents;
+      for (const event of snakes.playerDamageEvents) {
+        const damage = damagePlayer(levelState, 1, now, event.source);
+        result.playerDamageEvents.push({ ...event, amount: 1, ...damage });
+        result.playerRespawned ||= damage.playerRespawned;
+        result.gameOver ||= damage.gameOver;
+        if (damage.playerRespawned || damage.gameOver) break;
+      }
+      if (result.playerRespawned || result.gameOver) {
+        result.respawnReason = result.playerDamageEvents.at(-1)?.reason || null;
+        return result;
+      }
       result.fireSpitterEffects = applyFireSpitters(levelState, now);
 
       const gravity = applyGravity(levelState, now, gravitySkippedEntities);
       result.falling = gravity.moved;
+      result.playerDamageEvents.push(...gravity.playerDamageEvents);
       result.playerRespawned = gravity.playerRespawned;
+      result.gameOver = gravity.gameOver;
       result.respawnReason = gravity.respawnReason;
 
       return result;

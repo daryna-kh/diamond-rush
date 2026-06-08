@@ -4,6 +4,8 @@ function copyDraw(draw) {
 
 const INTRO_PASSAGE_KEYS = new Set(["225/225/225", "255/255/255"]);
 const INTRO_TILE_DURATION = 250;
+const INITIAL_PLAYER_HEALTH = 4;
+const INITIAL_PLAYER_LIVES = 5;
 
 function copyDoorAnimation(doorAnimation) {
   return doorAnimation ? { ...doorAnimation } : doorAnimation;
@@ -105,6 +107,13 @@ function createEntityState(entity) {
       openStartedAt: 0,
     };
   }
+  if (entity.type === "gem-lock") {
+    return {
+      ...baseEntity,
+      requiredDiamonds: entity.specifying_data,
+      unlocked: false,
+    };
+  }
   if (entity.type === "snake") {
     const motion = getSnakeMotion(entity);
     return {
@@ -199,8 +208,13 @@ function createPlayerState(stage, playerSpawn, spawnEntity) {
     visualMoving: false,
     moveStartedAt: 0,
     moveDuration: 0,
+    maxHealth: INITIAL_PLAYER_HEALTH,
+    health: INITIAL_PLAYER_HEALTH,
+    lives: INITIAL_PLAYER_LIVES,
+    invulnerableUntil: 0,
     intro,
     alive: true,
+    gameOver: false,
     sprite: null,
     specialAnimation: null,
   };
@@ -238,6 +252,7 @@ function snapshotEntity(entity) {
     activated: entity.activated,
     open: entity.open,
     opened: entity.opened,
+    unlocked: entity.unlocked,
     opening: false,
     openStartedAt: 0,
     boulderFrameIndex: entity.boulderFrameIndex,
@@ -280,8 +295,13 @@ function snapshotPlayer(player, checkpoint) {
     visualMoving: false,
     moveStartedAt: 0,
     moveDuration: 0,
+    maxHealth: player.maxHealth,
+    health: player.maxHealth,
+    lives: player.lives,
+    invulnerableUntil: 0,
     intro: null,
     alive: true,
+    gameOver: false,
     hidden: false,
     specialAnimation: null,
   };
@@ -341,6 +361,7 @@ export function createLevelState(stage, classification) {
     exits: entities.filter(
       (entity) => entity.type === "exit" || entity.type === "secret-exit",
     ),
+    gemLocks: entities.filter((entity) => entity.type === "gem-lock"),
     fireSpitters: entities.filter(
       (entity) =>
         entity.type === "fire-spitter-left" ||
@@ -354,6 +375,8 @@ export function createLevelState(stage, classification) {
     ),
     effects: [],
     collectedDiamonds: 0,
+    completedExit: null,
+    completedStage: false,
     activeCheckpointId: null,
     checkpointSnapshot: null,
   };
