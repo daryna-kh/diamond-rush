@@ -7,6 +7,8 @@ import {
   CHEST_BROWN_REWARD_LOOP_DURATION_MS,
   CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES,
   CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES,
+  DIAMOND_COLLECT_PLAYER_FRAME_INDEXES,
+  DIAMOND_COLLECT_PLAYER_FRAME_PREFIX,
   getChestBrownRewardDurationMs,
 } from "./playerAnimations.js";
 
@@ -15,16 +17,17 @@ const PLAYER_TEXTURES = new Map();
 const IDLE_ANIMATION_FRAME_MS = 120;
 const INTRO_WALK_FRAME_MS = 120;
 
-function frameId(index) {
-  return `o.f#0:frame:${index}:palette:0`;
+function frameId(index, prefix = "o.f#0") {
+  return `${prefix}:frame:${index}:palette:0`;
 }
 
-function frame(index, { flipX = false } = {}) {
-  return { frameId: frameId(index), index, flipX };
+function frame(index, { flipX = false, prefix } = {}) {
+  return { frameId: frameId(index, prefix), index, flipX };
 }
 
 const HORIZONTAL_DIRECTION_FRAMES = [62, 63, 64, 65, 66, 67];
-const HORIZONTAL_WALK_FRAMES = [62, 63, 64, 65, 66, 67, 64, 65];
+const HORIZONTAL_WALK_FRAMES = [0, 1, 2];
+const HORIZONTAL_PUSH_FRAMES = [3, 4, 5];
 
 export const PLAYER_SPRITE_FRAMES = Object.freeze({
   idle: {
@@ -36,10 +39,14 @@ export const PLAYER_SPRITE_FRAMES = Object.freeze({
     right: HORIZONTAL_DIRECTION_FRAMES.map((index) => frame(index)),
   },
   walk: {
-    down: [73, 76, 78, 76, 74, 71, 69, 71].map((index) => frame(index)),
-    up: [72, 75, 77, 75, 72, 70, 68, 70].map((index) => frame(index)),
+    down: [77, 71, 73, 74, 76, 78].map((index) => frame(index)),
+    up: [68, 70, 72, 75, 77].map((index) => frame(index)),
     left: HORIZONTAL_WALK_FRAMES.map((index) => frame(index, { flipX: true })),
     right: HORIZONTAL_WALK_FRAMES.map((index) => frame(index)),
+  },
+  push: {
+    left: HORIZONTAL_PUSH_FRAMES.map((index) => frame(index, { flipX: true })),
+    right: HORIZONTAL_PUSH_FRAMES.map((index) => frame(index)),
   },
 });
 
@@ -74,11 +81,13 @@ function getLoopFrame(frames, now, frameMs) {
 function getSpecialAnimationFrame(player, now) {
   const animation = player.specialAnimation;
   if (!animation?.active) return null;
+  if (animation.type === "diamond-collect") return null;
 
   const frameIndexes =
     animation.frameIndexes || CHEST_BROWN_REWARD_PLAYER_FRAME_INDEXES;
   const loopFrameIndexes =
     animation.loopFrameIndexes || CHEST_BROWN_REWARD_LOOP_FRAME_INDEXES;
+  const framePrefix = animation.framePrefix || "o.f#0";
   const frameMs = animation.frameMs || CHEST_BROWN_REWARD_FRAME_MS;
   const elapsed = Math.max(0, now - animation.startedAt);
   const introDuration = frameIndexes.length * frameMs;
@@ -93,12 +102,34 @@ function getSpecialAnimationFrame(player, now) {
 
   if (elapsed < introDuration) {
     const animationFrameIndex = Math.floor(elapsed / frameMs);
-    return frame(frameIndexes[animationFrameIndex]);
+    return frame(frameIndexes[animationFrameIndex], { prefix: framePrefix });
   }
 
   const loopElapsed = Math.min(elapsed - introDuration, loopDuration);
   const loopFrameIndex = Math.floor(loopElapsed / frameMs) % loopFrameIndexes.length;
-  return frame(loopFrameIndexes[loopFrameIndex]);
+  return frame(loopFrameIndexes[loopFrameIndex], { prefix: framePrefix });
+}
+
+function getDiamondCollectEffectFrame(player, now) {
+  const animation = player.specialAnimation;
+  if (!animation?.active || animation.type !== "diamond-collect") return null;
+
+  const frameIndexes =
+    animation.frameIndexes || DIAMOND_COLLECT_PLAYER_FRAME_INDEXES;
+  const framePrefix = animation.framePrefix || DIAMOND_COLLECT_PLAYER_FRAME_PREFIX;
+  const frameMs = animation.frameMs || 80;
+  const duration = animation.durationMs || frameIndexes.length * frameMs;
+  const elapsed = Math.max(0, now - animation.startedAt);
+
+  if (elapsed >= duration) {
+    animation.active = false;
+    return null;
+  }
+
+  const frameIndex = frameIndexes[
+    Math.min(Math.floor(elapsed / frameMs), frameIndexes.length - 1)
+  ];
+  return frame(frameIndex, { prefix: framePrefix });
 }
 
 function getPlayerFrame(player, now) {
@@ -106,6 +137,12 @@ function getPlayerFrame(player, now) {
   if (specialFrame) return specialFrame;
 
   const direction = getDirection(player);
+  if (player.pushing && PLAYER_SPRITE_FRAMES.push[direction]) {
+    const frames = PLAYER_SPRITE_FRAMES.push[direction];
+    const index = (player.walkFrame || 0) % frames.length;
+    return frames[index];
+  }
+
   if (player.moving || player.visualMoving) {
     const frames = PLAYER_SPRITE_FRAMES.walk[direction];
     const index = (player.walkFrame || 0) % frames.length;
@@ -208,6 +245,41 @@ function syncPlayerGemSprite(assets, player, nextFrame) {
     CHEST_BROWN_REWARD_GEM_FRAME_INDEXES.includes(nextFrame.index);
 }
 
+function syncPlayerDiamondCollectSprite(assets, player, now) {
+  if (!player.sprite) return;
+
+  const effectFrame = getDiamondCollectEffectFrame(player, now);
+  if (!effectFrame) {
+    if (player.diamondCollectSprite) {
+      player.diamondCollectSprite.visible = false;
+    }
+    return;
+  }
+
+  if (!player.diamondCollectSprite) {
+    const texture = createFrameTexture(assets, effectFrame.frameId);
+    const sprite = new Sprite({ texture, roundPixels: true });
+    sprite.label = "player:diamond-collect";
+    sprite.anchor.set(0.5, 1);
+    sprite.x = 0;
+    sprite.y = TILE_SIZE;
+    sprite.visible = false;
+    player.sprite.addChild(sprite);
+    player.diamondCollectSprite = sprite;
+    player.diamondCollectFrameId = null;
+  }
+
+  if (player.diamondCollectFrameId !== effectFrame.frameId) {
+    player.diamondCollectSprite.texture = createFrameTexture(
+      assets,
+      effectFrame.frameId,
+    );
+    player.diamondCollectFrameId = effectFrame.frameId;
+  }
+
+  player.diamondCollectSprite.visible = true;
+}
+
 export function syncPlayerSprite(assets, player, now = Date.now()) {
   if (!player.sprite) return;
 
@@ -223,6 +295,7 @@ export function syncPlayerSprite(assets, player, now = Date.now()) {
   player.spriteFlipX = nextFrame.flipX;
   player.sprite.visible = !player.hidden && player.alive !== false;
   syncPlayerGemSprite(assets, player, nextFrame);
+  syncPlayerDiamondCollectSprite(assets, player, now);
   alignPlayerSprite(player);
 }
 

@@ -26,3 +26,24 @@ export function getChestBrownRewardDurationMs(frameMs = CHEST_BROWN_REWARD_FRAME
     CHEST_BROWN_REWARD_LOOP_DURATION_MS
   );
 }
+
+export const DIAMOND_COLLECT_PLAYER_FRAME_PREFIX = "cm.f#7";
+export const DIAMOND_COLLECT_PLAYER_FRAME_INDEXES = [
+  30,
+  31,
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+];
+export const DIAMOND_COLLECT_FRAME_MS = 80;
+
+export function getDiamondCollectDurationMs(
+  frameMs = DIAMOND_COLLECT_FRAME_MS,
+) {
+  return DIAMOND_COLLECT_PLAYER_FRAME_INDEXES.length * frameMs;
+}
