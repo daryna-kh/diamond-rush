@@ -4,6 +4,8 @@ function copyDraw(draw) {
 
 const INTRO_PASSAGE_KEYS = new Set(["225/225/225", "255/255/255"]);
 const INTRO_TILE_DURATION = 250;
+const INITIAL_PLAYER_HEALTH = 4;
+const INITIAL_PLAYER_LIVES = 5;
 
 function copyDoorAnimation(doorAnimation) {
   return doorAnimation ? { ...doorAnimation } : doorAnimation;
@@ -206,8 +208,13 @@ function createPlayerState(stage, playerSpawn, spawnEntity) {
     visualMoving: false,
     moveStartedAt: 0,
     moveDuration: 0,
+    maxHealth: INITIAL_PLAYER_HEALTH,
+    health: INITIAL_PLAYER_HEALTH,
+    lives: INITIAL_PLAYER_LIVES,
+    invulnerableUntil: 0,
     intro,
     alive: true,
+    gameOver: false,
     sprite: null,
     specialAnimation: null,
   };
@@ -288,8 +295,13 @@ function snapshotPlayer(player, checkpoint) {
     visualMoving: false,
     moveStartedAt: 0,
     moveDuration: 0,
+    maxHealth: player.maxHealth,
+    health: player.maxHealth,
+    lives: player.lives,
+    invulnerableUntil: 0,
     intro: null,
     alive: true,
+    gameOver: false,
     hidden: false,
     specialAnimation: null,
   };
