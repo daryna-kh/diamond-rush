@@ -105,6 +105,13 @@ function createEntityState(entity) {
       openStartedAt: 0,
     };
   }
+  if (entity.type === "gem-lock") {
+    return {
+      ...baseEntity,
+      requiredDiamonds: entity.specifying_data,
+      unlocked: false,
+    };
+  }
   if (entity.type === "snake") {
     const motion = getSnakeMotion(entity);
     return {
@@ -238,6 +245,7 @@ function snapshotEntity(entity) {
     activated: entity.activated,
     open: entity.open,
     opened: entity.opened,
+    unlocked: entity.unlocked,
     opening: false,
     openStartedAt: 0,
     boulderFrameIndex: entity.boulderFrameIndex,
@@ -341,6 +349,7 @@ export function createLevelState(stage, classification) {
     exits: entities.filter(
       (entity) => entity.type === "exit" || entity.type === "secret-exit",
     ),
+    gemLocks: entities.filter((entity) => entity.type === "gem-lock"),
     fireSpitters: entities.filter(
       (entity) =>
         entity.type === "fire-spitter-left" ||
@@ -354,6 +363,8 @@ export function createLevelState(stage, classification) {
     ),
     effects: [],
     collectedDiamonds: 0,
+    completedExit: null,
+    completedStage: false,
     activeCheckpointId: null,
     checkpointSnapshot: null,
   };

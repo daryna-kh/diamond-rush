@@ -89,8 +89,10 @@ async function main() {
       initialSceneState.stageRoot,
     );
     statusPanel.setMode(mode);
+    let devPicker = null;
     scene.onSceneChange(({ worldId, stage, stageRoot }) => {
       statusPanel.updateScene(worldId, stage, stageRoot);
+      devPicker?.setSelection(worldId, stage.id);
       globalThis.__diamondRushStage = stageRoot;
       globalThis.__diamondRushWorld = worldId;
       globalThis.__diamondRushLevelState = stageRoot.levelState;
@@ -111,7 +113,7 @@ async function main() {
       onInspect: (cell) => statusPanel.updateCell(cell),
     });
 
-    const devPicker = createDevPicker({
+    devPicker = createDevPicker({
       worlds: assets.worlds,
       stagesByWorld: assets.stages,
       stageMetadata: assets.stageMetadata,

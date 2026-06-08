@@ -170,6 +170,12 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     },
     tick(input, now = Date.now()) {
       const result = stageRoot.simulation.tick(input, now);
+      if (result.completedExit) {
+        syncStageAnimations(stageRoot.stageLayers.staticLayer, assets, now);
+        syncLevelStateSprites(assets, stageRoot.levelState, now);
+        emitSceneChange();
+        return result;
+      }
       syncStageAnimations(stageRoot.stageLayers.staticLayer, assets, now);
       syncLevelStateSprites(assets, stageRoot.levelState, now);
       emitSceneChange();

@@ -75,6 +75,7 @@ function getStatusLines(assets, worldId, stage, stageRoot, inspectedCell) {
     `dynamic overlay: ${stageRoot.dynamicHighlightEnabled ? "on" : "off"}`,
     `entities: ${levelState?.entities.length ?? "-"}`,
     `collectibles: ${levelState ? `${levelState.collectedDiamonds}/${levelState.collectibles.length}` : "-"}`,
+    `gem locks: ${levelState ? `${levelState.gemLocks.filter((lock) => lock.unlocked).length}/${levelState.gemLocks.length}` : "-"}`,
     `boulders: ${levelState?.boulders.length ?? "-"}`,
     `checkpoints: ${levelState?.checkpoints.length ?? "-"}`,
     `exits: ${levelState?.exits.length ?? "-"}`,

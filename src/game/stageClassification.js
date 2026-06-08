@@ -24,6 +24,7 @@ function getEntityType(cell, rule = null) {
   if (cell.blocks === 1) return "diamond";
   if (cell.blocks === 0) return "boulder";
   if (cell.blocks === 10) return "leaf";
+  if (cell.blocks === 12) return "gem-lock";
   if (cell.blocks === 19 || (cell.blocks === 43 && cell.specifying_data !== 0)) return "snake";
   if (cell.blocks === 22) return "fire-spitter-right";
   if (cell.blocks === 23) return "fire-spitter-left";

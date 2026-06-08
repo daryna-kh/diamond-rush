@@ -12,6 +12,7 @@ const ENTITY_COLORS = {
   "fire-spitter-left": 0xff3b1f,
   "fire-spitter-right": 0xff8a1f,
   "chest-brown": 0xb98245,
+  "gem-lock": 0x7d5cff,
 };
 
 export function createDynamicEntityOverlay(levelState) {

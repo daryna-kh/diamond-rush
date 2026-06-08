@@ -114,6 +114,43 @@ function collectDiamonds(levelState, entities, now) {
   return collected;
 }
 
+function unlockGemLocks(levelState) {
+  const unlocked = [];
+  for (const lock of levelState.gemLocks) {
+    if (
+      lock.type !== "gem-lock" ||
+      lock.unlocked ||
+      levelState.collectedDiamonds < lock.requiredDiamonds
+    ) {
+      continue;
+    }
+
+    lock.unlocked = true;
+    lock.active = false;
+    unlocked.push(lock);
+  }
+  return unlocked;
+}
+
+function completeExit(levelState, entities) {
+  if (levelState.completedStage) return null;
+  const exit = entities.find(
+    (entity) =>
+      (entity.type === "exit" || entity.type === "secret-exit") &&
+      entity.active,
+  );
+  if (!exit) return null;
+
+  levelState.completedStage = true;
+  levelState.completedExit = {
+    id: exit.id,
+    x: exit.x,
+    y: exit.y,
+    secret: exit.type === "secret-exit",
+  };
+  return exit;
+}
+
 function vanishLeaves(entities, now) {
   const vanishing = [];
   for (const entity of entities) {
@@ -369,14 +406,18 @@ export function createGameSimulation(levelState) {
         snakes: [],
         playerDamageEvents: [],
         openedChests: [],
+        unlockedGemLocks: [],
+        completedExit: null,
         lifecycle: null,
         playerRespawned: false,
         respawnReason: null,
       };
 
       result.lifecycle = advanceEntityLifecycle(levelState, now);
+      result.unlockedGemLocks.push(...unlockGemLocks(levelState));
       levelState.player.moving = false;
       levelState.player.pushing = false;
+      if (levelState.completedStage) return result;
       if (levelState.player.intro?.active) return result;
       if (isPlayerSpecialAnimationActive(levelState.player, now)) return result;
 
@@ -406,16 +447,20 @@ export function createGameSimulation(levelState) {
             }
           } else {
             result.collected = collectDiamonds(levelState, target.entities, now);
+            result.unlockedGemLocks.push(...unlockGemLocks(levelState));
             result.vanishing = vanishLeaves(target.entities, now);
             setPlayerMove(levelState.player, targetX, targetY, now);
             result.openedChests = openBrownChests(levelState, target.entities, now);
             const activatedCheckpoint = activateCheckpoints(target.entities);
             if (activatedCheckpoint)
               saveCheckpointSnapshot(levelState, activatedCheckpoint);
+            result.completedExit = completeExit(levelState, target.entities);
             result.moved = true;
           }
         }
       }
+
+      if (result.completedExit) return result;
 
       const snakes = applySnakes(levelState, now, gravitySkippedEntities);
       result.snakes = snakes.moved;
