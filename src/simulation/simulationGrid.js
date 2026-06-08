@@ -2,6 +2,7 @@ import { getRawCell, getStaticPassability } from "./passability.js";
 import { TICK_MS } from "./simulationTiming.js";
 
 export const ROUND_ENTITY_ROLL_PREPARE_MS = 1000;
+export const ROUND_ENTITY_FALL_MOVE_MS = 320;
 
 export function isInBounds(levelState, x, y) {
   return x >= 0 && y >= 0 && x < levelState.width && y < levelState.height;

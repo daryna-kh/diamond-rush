@@ -26,6 +26,19 @@ const BOULDER_FRAME_PREFIX = "0.f#0";
 const ROLL_PENDING_WOBBLE_CYCLES = 5;
 const ROLL_PENDING_WOBBLE_X = 0.08;
 const ROLL_PENDING_WOBBLE_Y = 0.025;
+const SNAKE_FRAME_MS = 120;
+const SNAKE_FRAME_PREFIX = "gen1.f#5";
+const SNAKE_FRAME_RANGES = {
+  "x:1": [15, 16, 17, 18, 19, 20, 21],
+  "x:-1": [24, 25, 26, 27, 28, 29, 30],
+  "y:1": [5, 6, 7, 8],
+  "y:-1": [11, 12, 13, 14],
+};
+const SNAKE_PLAYER_TARGET_FRAME_RANGES = {
+  "x:1": [22, 23],
+  "x:-1": [31, 32],
+  "y:1": [9, 10],
+};
 
 function createFrameTexture(assets, draw, textureCache) {
   const cacheKey = `${draw.atlas}:${draw.frameId}`;
@@ -250,18 +263,93 @@ function syncLeafSprite(assets, entity, sprite, now) {
   return true;
 }
 
-function syncSnakeSprite(entity, sprite, now) {
+function getSnakeDelta(entity) {
+  const direction = entity.snakeDirection < 0 ? -1 : 1;
+  return entity.snakeAxis === "y"
+    ? { dx: 0, dy: direction }
+    : { dx: direction, dy: 0 };
+}
+
+function getSnakeTrajectoryOrigin(entity) {
+  const isMoving = entity.moveStartedAt > 0 && entity.moveDuration > 0;
+  return {
+    x: isMoving ? entity.prevX : entity.x,
+    y: isMoving ? entity.prevY : entity.y,
+  };
+}
+
+function isPlayerInSnakeTargetPath(entity, levelState) {
+  const player = levelState.player;
+  const origin = getSnakeTrajectoryOrigin(entity);
+  const delta = getSnakeDelta(entity);
+  return (
+    player.alive !== false &&
+    ((origin.x + delta.dx === player.x &&
+      origin.y + delta.dy === player.y) ||
+      (origin.x + delta.dx * 2 === player.x &&
+        origin.y + delta.dy * 2 === player.y))
+  );
+}
+
+function getSnakeFrameIndex(entity, range, now) {
+  if (entity.moveStartedAt > 0 && entity.moveDuration > 0) {
+    const progress = clamp01((now - entity.moveStartedAt) / entity.moveDuration);
+    return range[Math.min(Math.floor(progress * range.length), range.length - 1)];
+  }
+
+  return range[Math.floor(now / SNAKE_FRAME_MS) % range.length];
+}
+
+function getSnakeFrameId(entity, draw, now, levelState) {
+  const direction = entity.snakeDirection < 0 ? -1 : 1;
+  const directionKey = `${entity.snakeAxis}:${direction}`;
+  const range = isPlayerInSnakeTargetPath(entity, levelState)
+    ? SNAKE_PLAYER_TARGET_FRAME_RANGES[directionKey] ||
+      SNAKE_FRAME_RANGES[directionKey]
+    : SNAKE_FRAME_RANGES[directionKey];
+  if (!range) return null;
+
+  const paletteMatch = draw.frameId?.match(/:palette:(\d+)$/);
+  const palette = paletteMatch ? Number(paletteMatch[1]) : 0;
+  const frameIndex = getSnakeFrameIndex(entity, range, now);
+  return `${SNAKE_FRAME_PREFIX}:frame:${frameIndex}:palette:${palette}`;
+}
+
+function alignSnakeSprite(entity, sprite, draw, x, y) {
+  const centeredX = Math.floor((TILE_SIZE - sprite.texture.width) / 2);
+  sprite.scale.x = 1;
+  sprite.scale.y = 1;
+
+  if (entity.snakeAxis === "y") {
+    sprite.x = x * TILE_SIZE + centeredX;
+    sprite.y = y * TILE_SIZE + TILE_SIZE - sprite.texture.height;
+    return;
+  }
+
+  sprite.x = x * TILE_SIZE + centeredX;
+  sprite.y = y * TILE_SIZE + draw.dy;
+}
+
+function syncSnakeSprite(assets, levelState, entity, sprite, now) {
   if (entity.type !== "snake") return false;
 
   const draw = sprite.entityDraw || { dx: 0, dy: 0 };
-  const { x, y } = getEntityRenderPosition(entity, now);
-  const flipX = entity.snakeAxis === "x" && entity.snakeDirection < 0;
-  const flipY = entity.snakeAxis === "y" && entity.snakeDirection < 0;
+  const frameId = getSnakeFrameId(entity, draw, now, levelState);
+  const texture = frameId
+    ? createAtlasFrameTexture(
+        assets,
+        draw.atlas,
+        frameId,
+        sprite.entityTextureCache,
+      )
+    : null;
+  if (texture && sprite.entityAnimatedFrameId !== frameId) {
+    sprite.texture = texture;
+    sprite.entityAnimatedFrameId = frameId;
+  }
 
-  sprite.scale.x = flipX ? -1 : 1;
-  sprite.scale.y = flipY ? -1 : 1;
-  sprite.x = x * TILE_SIZE + draw.dx + (flipX ? sprite.texture.width : 0);
-  sprite.y = y * TILE_SIZE + draw.dy + (flipY ? sprite.texture.height : 0);
+  const { x, y } = getEntityRenderPosition(entity, now);
+  alignSnakeSprite(entity, sprite, draw, x, y);
   return true;
 }
 
@@ -469,7 +557,7 @@ export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
         continue;
       }
       if (syncLeafSprite(assets, entity, sprite, now)) continue;
-      if (syncSnakeSprite(entity, sprite, now)) {
+      if (syncSnakeSprite(assets, levelState, entity, sprite, now)) {
         sprite.visible = visible;
         continue;
       }
