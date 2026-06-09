@@ -8,6 +8,18 @@ import {
   startPendingRoundEntityRoll,
 } from "../simulationGrid.js";
 
+function startDiamondFall(diamond) {
+  if (!diamond.falling) {
+    diamond.fallStartY = diamond.y;
+  }
+  diamond.falling = true;
+}
+
+function stopDiamondFall(diamond) {
+  diamond.falling = false;
+  diamond.fallStartY = null;
+}
+
 export function applyDiamondGravity(levelState, diamond, now, helpers) {
   if (diamond.type !== "diamond" || !diamond.active || diamond.collected) {
     return { moved: false, entity: diamond, kind: null };
@@ -19,10 +31,14 @@ export function applyDiamondGravity(levelState, diamond, now, helpers) {
 
   if (fallTarget.canFall) {
     clearPendingRoundEntityRoll(diamond);
-    diamond.falling = true;
+    startDiamondFall(diamond);
     setEntityMove(diamond, targetX, targetY, now, ROUND_ENTITY_FALL_MOVE_MS);
     if (fallTarget.hitPlayer) diamond.disappearAfterMove = true;
-    return { moved: true, entity: diamond, kind: "fall" };
+    return {
+      moved: true,
+      entity: diamond,
+      kind: "fall",
+    };
   }
 
   const rollTarget = getRoundEntityRollTarget(levelState, diamond);
@@ -31,17 +47,17 @@ export function applyDiamondGravity(levelState, diamond, now, helpers) {
       if (!isPendingRoundEntityRollTarget(diamond, rollTarget)) {
         startPendingRoundEntityRoll(diamond, rollTarget, now);
       }
-      diamond.falling = false;
+      stopDiamondFall(diamond);
       return { moved: false, entity: diamond, kind: "roll-pending" };
     }
 
     clearPendingRoundEntityRoll(diamond);
-    diamond.falling = true;
+    startDiamondFall(diamond);
     setEntityMove(diamond, rollTarget.x, rollTarget.y, now);
     return { moved: true, entity: diamond, kind: "roll" };
   }
 
   clearPendingRoundEntityRoll(diamond);
-  diamond.falling = false;
+  stopDiamondFall(diamond);
   return { moved: false, entity: diamond, kind: null };
 }

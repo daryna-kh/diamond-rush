@@ -14,8 +14,14 @@ import {
   DIAMOND_COLLECT_FRAME_MS,
   DIAMOND_COLLECT_PLAYER_FRAME_INDEXES,
   DIAMOND_COLLECT_PLAYER_FRAME_PREFIX,
+  PLAYER_DAMAGE_FRAME_INDEXES,
+  PLAYER_DAMAGE_FRAME_MS,
+  PLAYER_FIRE_DAMAGE_FRAME_INDEXES,
+  PLAYER_FIRE_DAMAGE_FRAME_PREFIX,
+  PLAYER_FIRE_DEATH_FRAME_INDEXES,
   getDiamondCollectDurationMs,
   getChestBrownRewardDurationMs,
+  getPlayerDamageDurationMs,
 } from "../game/playerAnimations.js";
 import { applyBoulderGravity, applyBoulderPush } from "./entities/boulder.js";
 import { activateCheckpoints } from "./entities/checkpoints.js";
@@ -38,6 +44,13 @@ const DIRECTIONS = {
   down: { dx: 0, dy: 1, direction: "down" },
 };
 const PLAYER_DAMAGE_INVULNERABLE_MS = 700;
+const ENEMY_CONTACT_DAMAGE = 1;
+const FIRE_CONTACT_DAMAGE = 1;
+const HEAVY_FALL_DAMAGE = 2;
+const BOULDER_CRUSH_STRUGGLE_MS = 600;
+const BOULDER_CRUSH_CURTAIN_MS = 1000;
+export const BOULDER_CRUSH_SEQUENCE_MS =
+  BOULDER_CRUSH_STRUGGLE_MS + BOULDER_CRUSH_CURTAIN_MS;
 
 function normalizeInput(input) {
   if (!input) return null;
@@ -69,25 +82,44 @@ function isFallingEntity(entity) {
   return entity.type === "diamond" || entity.type === "boulder";
 }
 
+function isPassableEntity(entity) {
+  if (entity.type === "diamond") return true;
+  if (entity.type === "leaf") return true;
+  if (entity.type === "checkpoint") return true;
+  if (entity.type === "chest-brown") return true;
+  if (entity.type === "exit" || entity.type === "secret-exit") return true;
+  if (entity.type === "player-spawn") return true;
+  return false;
+}
+
+function getClosedDoorAt(levelState, x, y) {
+  return levelState.entities.find(
+    (entity) =>
+      entity.type === "player-spawn" &&
+      entity.active &&
+      entity.doorAnimation?.state === "closed" &&
+      entity.doorX === x &&
+      entity.doorY === y,
+  );
+}
+
 function getTargetInfo(levelState, x, y) {
   if (x < 0 || y < 0 || x >= levelState.width || y >= levelState.height) {
     return { passable: false, reason: "bounds", entities: [] };
   }
 
   const entities = getActiveEntitiesAt(levelState, x, y);
+  const closedDoor = getClosedDoorAt(levelState, x, y);
+  if (closedDoor) {
+    return { passable: false, reason: "closed-door", entities };
+  }
+
   if (entities.some((entity) => entity.type === "boulder")) {
     return { passable: false, reason: "boulder", entities };
   }
 
   const blockingEntity = entities.find(
-    (entity) =>
-      entity.type !== "diamond" &&
-      entity.type !== "leaf" &&
-      entity.type !== "checkpoint" &&
-      entity.type !== "chest-brown" &&
-      entity.type !== "player-spawn" &&
-      entity.type !== "exit" &&
-      entity.type !== "secret-exit",
+    (entity) => !isPassableEntity(entity),
   );
   if (blockingEntity)
     return { passable: false, reason: blockingEntity.type, entities };
@@ -133,7 +165,68 @@ function unlockGemLocks(levelState) {
   return unlocked;
 }
 
-function completeExit(levelState, entities) {
+function isExitAutoMoveFreeCell(levelState, x, y) {
+  const target = getTargetInfo(levelState, x, y);
+  if (!target.passable) return false;
+
+  return target.entities.every(
+    (entity) =>
+      entity.type === "checkpoint" ||
+      entity.type === "player-spawn" ||
+      entity.type === "exit" ||
+      entity.type === "secret-exit",
+  );
+}
+
+function getExitAutoMoveTarget(levelState, direction) {
+  const vector = DIRECTIONS[direction] || DIRECTIONS.down;
+  let targetX = levelState.player.x;
+  let targetY = levelState.player.y;
+
+  while (
+    isExitAutoMoveFreeCell(
+      levelState,
+      targetX + vector.dx,
+      targetY + vector.dy,
+    )
+  ) {
+    targetX += vector.dx;
+    targetY += vector.dy;
+  }
+
+  return { x: targetX, y: targetY };
+}
+
+function startExitAutoMove(levelState, now) {
+  const player = levelState.player;
+  const direction = player.direction || "down";
+  const target = getExitAutoMoveTarget(levelState, direction);
+  const continueCurrentStep = player.moveStartedAt === now;
+  const startX = continueCurrentStep ? player.prevX : player.x;
+  const startY = continueCurrentStep ? player.prevY : player.y;
+  const distance = Math.max(
+    1,
+    Math.abs(target.x - startX) + Math.abs(target.y - startY),
+  );
+
+  player.exitAutoMove = {
+    active: true,
+    direction,
+    startX,
+    startY,
+    targetX: target.x,
+    targetY: target.y,
+    moveStartedAt: now,
+    moveDuration: distance * TICK_MS,
+  };
+  player.direction = direction;
+  player.walkFrame = 0;
+  player.moving = true;
+  player.visualMoving = true;
+  player.pushing = false;
+}
+
+function completeExit(levelState, entities, now) {
   if (levelState.completedStage) return null;
   const exit = entities.find(
     (entity) =>
@@ -149,6 +242,7 @@ function completeExit(levelState, entities) {
     y: exit.y,
     secret: exit.type === "secret-exit",
   };
+  startExitAutoMove(levelState, now);
   return exit;
 }
 
@@ -179,6 +273,123 @@ function respawnPlayer(levelState, now, reason) {
   };
 }
 
+function clearBoulderHold(levelState) {
+  levelState.player.boulderHold = null;
+}
+
+function setBoulderHold(levelState, startedAt, boulder) {
+  if (levelState.player.boulderCrush?.active) return;
+  levelState.player.boulderHold = {
+    active: true,
+    startedAt,
+    boulderId: boulder?.id || null,
+  };
+}
+
+function startBoulderCrushSequence(
+  levelState,
+  now,
+  reason,
+  boulder,
+  {
+    damageAmount = HEAVY_FALL_DAMAGE,
+    instantDeath = false,
+    fallCells = 0,
+    preAppliedDamage = false,
+    preserveSpecialAnimation = false,
+  } = {},
+) {
+  if (levelState.player.boulderCrush?.active) return;
+  levelState.player.boulderHold = null;
+  if (boulder) {
+    boulder.falling = false;
+    boulder.fallStartY = null;
+  }
+  levelState.player.boulderCrush = {
+    active: true,
+    startedAt: now,
+    reason,
+    boulderId: boulder?.id || null,
+    damageAmount,
+    instantDeath,
+    fallCells,
+    preAppliedDamage,
+    curtainStartedAt: now + BOULDER_CRUSH_STRUGGLE_MS,
+    restoreAt: now + BOULDER_CRUSH_SEQUENCE_MS,
+  };
+  levelState.player.moving = false;
+  levelState.player.visualMoving = false;
+  levelState.player.pushing = false;
+  if (!preserveSpecialAnimation) levelState.player.specialAnimation = null;
+}
+
+function isFireDamageEvent(event) {
+  return event.source === "fire" || event.reason === "fire-spitter-flame";
+}
+
+function startPlayerDamageAnimation(player, now, event = {}) {
+  if (player.boulderCrush?.active) return;
+  const fireDamage = isFireDamageEvent(event);
+  player.specialAnimation = {
+    type: fireDamage ? "player-fire-damage" : "player-damage",
+    active: true,
+    startedAt: now,
+    frameMs: PLAYER_DAMAGE_FRAME_MS,
+    frameIndexes: fireDamage
+      ? PLAYER_FIRE_DAMAGE_FRAME_INDEXES
+      : PLAYER_DAMAGE_FRAME_INDEXES,
+    framePrefix: fireDamage ? PLAYER_FIRE_DAMAGE_FRAME_PREFIX : "o.f#0",
+    loopFrameIndexes: [],
+    loopDurationMs: 0,
+    durationMs: getPlayerDamageDurationMs(PLAYER_DAMAGE_FRAME_MS),
+    blocksSimulation: false,
+  };
+}
+
+function startPlayerDeathSequence(levelState, now, reason, amount, event = {}) {
+  const player = levelState.player;
+  if (player.boulderCrush?.active) {
+    return {
+      damaged: false,
+      playerRespawned: false,
+      gameOver: false,
+      reason: "death-sequence-active",
+    };
+  }
+
+  player.health = 0;
+  player.invulnerableUntil = now + PLAYER_DAMAGE_INVULNERABLE_MS;
+  if (isFireDamageEvent(event)) {
+    player.specialAnimation = {
+      type: "player-fire-death",
+      active: true,
+      startedAt: now,
+      frameMs: PLAYER_DAMAGE_FRAME_MS,
+      frameIndexes: PLAYER_FIRE_DEATH_FRAME_INDEXES,
+      framePrefix: PLAYER_FIRE_DAMAGE_FRAME_PREFIX,
+      loopFrameIndexes: [],
+      loopDurationMs: 0,
+      durationMs: PLAYER_FIRE_DEATH_FRAME_INDEXES.length * PLAYER_DAMAGE_FRAME_MS,
+      blocksSimulation: false,
+    };
+  }
+  startBoulderCrushSequence(levelState, now, reason, null, {
+    damageAmount: amount,
+    instantDeath: !!event.instantDeath,
+    fallCells: event.fallCells || 0,
+    preAppliedDamage: true,
+    preserveSpecialAnimation: isFireDamageEvent(event),
+  });
+
+  return {
+    damaged: true,
+    playerRespawned: false,
+    gameOver: false,
+    reason,
+    deathSequenceStarted: true,
+  };
+}
+
 function damagePlayer(levelState, amount, now, reason, options = {}) {
   const player = levelState.player;
   if (player.gameOver || player.alive === false) {
@@ -191,6 +402,8 @@ function damagePlayer(levelState, amount, now, reason, options = {}) {
   player.health = Math.max(0, player.health - amount);
   player.invulnerableUntil = now + PLAYER_DAMAGE_INVULNERABLE_MS;
   if (player.health > 0) {
+    if (!options.skipDamageAnimation)
+      startPlayerDamageAnimation(player, now, options.event);
     return { damaged: true, playerRespawned: false, gameOver: false, reason };
   }
 
@@ -206,8 +419,84 @@ function killPlayer(levelState, now, reason) {
     levelState.player.health || levelState.player.maxHealth,
     now,
     reason,
-    { bypassInvulnerability: true },
+    { bypassInvulnerability: true, skipDamageAnimation: true },
   );
+}
+
+function applyDamageEvent(levelState, event, now, options = {}) {
+  const player = levelState.player;
+  const reason = event.reason || event.source;
+  const amount = event.instantDeath
+    ? player.health || player.maxHealth
+    : event.amount;
+
+  if (player.gameOver || player.alive === false) {
+    return { ...event, amount, damaged: false, playerRespawned: false, gameOver: !!player.gameOver, reason };
+  }
+  if (!options.bypassInvulnerability && now < (player.invulnerableUntil || 0)) {
+    return { ...event, amount, damaged: false, playerRespawned: false, gameOver: false, reason: "invulnerable" };
+  }
+  if (event.instantDeath || amount >= player.health) {
+    const death = startPlayerDeathSequence(
+      levelState,
+      now,
+      reason,
+      amount,
+      event,
+    );
+    return { ...event, amount, ...death };
+  }
+
+  const damage = damagePlayer(
+    levelState,
+    amount,
+    now,
+    reason,
+    { ...options, event },
+  );
+
+  return {
+    ...event,
+    amount,
+    ...damage,
+  };
+}
+
+function advanceBoulderCrushSequence(levelState, now) {
+  const sequence = levelState.player.boulderCrush;
+  if (!sequence?.active) return null;
+  if (now < sequence.restoreAt) {
+    return {
+      active: true,
+      completed: false,
+      playerRespawned: false,
+      gameOver: false,
+      reason: sequence.reason,
+    };
+  }
+
+  const reason = sequence.reason || "player-crush";
+  levelState.player.boulderCrush = null;
+  const damage = sequence.preAppliedDamage
+    ? respawnPlayer(levelState, now, reason)
+    : sequence.instantDeath
+      ? killPlayer(levelState, now, reason)
+      : damagePlayer(levelState, sequence.damageAmount || HEAVY_FALL_DAMAGE, now, reason, {
+          bypassInvulnerability: true,
+        });
+  return {
+    active: false,
+    completed: true,
+    damaged: sequence.preAppliedDamage || damage.damaged,
+    amount: sequence.instantDeath
+      ? levelState.player.maxHealth
+      : sequence.damageAmount || HEAVY_FALL_DAMAGE,
+    instantDeath: !!sequence.instantDeath,
+    fallCells: sequence.fallCells || 0,
+    playerRespawned: damage.playerRespawned,
+    gameOver: damage.gameOver,
+    reason,
+  };
 }
 
 function vanishLeaves(entities, now) {
@@ -378,9 +667,57 @@ function applySnakes(levelState, now, skippedEntities = new Set()) {
   return { moved, playerDamageEvents };
 }
 
+function isFireEffectHittingPlayer(levelState, effect) {
+  const player = levelState.player;
+  if (
+    !effect.active ||
+    effect.type !== "fire-spitter-flame" ||
+    player.alive === false ||
+    player.gameOver ||
+    player.y !== effect.y
+  ) {
+    return false;
+  }
+
+  const minX = Math.min(effect.originX, effect.targetX);
+  const maxX = Math.max(effect.originX, effect.targetX);
+  return player.x >= minX && player.x <= maxX;
+}
+
+function applyFireEffectDamage(levelState, now) {
+  const playerDamageEvents = [];
+
+  for (const effect of levelState.effects) {
+    if (!isFireEffectHittingPlayer(levelState, effect)) continue;
+
+    const damage = applyDamageEvent(
+      levelState,
+      {
+        source: "fire",
+        reason: "fire-spitter-flame",
+        entity: effect,
+        amount: FIRE_CONTACT_DAMAGE,
+        x: levelState.player.x,
+        y: levelState.player.y,
+      },
+      now,
+    );
+    playerDamageEvents.push(damage);
+    if (damage.playerRespawned || damage.gameOver) break;
+  }
+
+  return {
+    playerDamageEvents,
+    playerRespawned:
+      playerDamageEvents.some((event) => event.playerRespawned),
+    gameOver: playerDamageEvents.some((event) => event.gameOver),
+  };
+}
+
 function applyGravity(levelState, now, skippedEntities = new Set()) {
   const moved = [];
   const playerDamageEvents = [];
+  let playerHoldingBoulder = null;
   const fallingEntities = levelState.entities
     .filter(
       (entity) =>
@@ -396,21 +733,39 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
       const result = applyBoulderGravity(levelState, entity, now, {
         getEntityFallTarget,
       });
-      if (result.playerRespawn) {
-        const damage = killPlayer(levelState, now, result.kind);
+      if (result.playerCrush) {
+        const amount = result.instantDeath
+          ? levelState.player.maxHealth
+          : result.damageAmount || HEAVY_FALL_DAMAGE;
+        startBoulderCrushSequence(levelState, now, result.kind, entity, {
+          damageAmount: amount,
+          instantDeath: !!result.instantDeath,
+          fallCells: result.fallCells || 0,
+        });
         playerDamageEvents.push({
           source: "boulder",
           entity,
-          amount: levelState.player.maxHealth,
+          amount,
           reason: result.kind,
-          ...damage,
+          instantDeath: !!result.instantDeath,
+          fallCells: result.fallCells || 0,
+          damaged: false,
+          playerRespawned: false,
+          gameOver: false,
         });
         return {
           moved,
           playerDamageEvents,
-          playerRespawned: damage.playerRespawned,
-          gameOver: damage.gameOver,
+          playerRespawned: false,
+          gameOver: false,
+          playerCrushSequenceStarted: true,
           respawnReason: result.kind,
+        };
+      }
+      if (result.kind === "player-support") {
+        playerHoldingBoulder = {
+          boulder: entity,
+          startedAt: result.playerSupportStartedAt || now,
         };
       }
       if (result.moved) moved.push(entity);
@@ -423,7 +778,17 @@ function applyGravity(levelState, now, skippedEntities = new Set()) {
     if (result.moved) moved.push(entity);
   }
 
-  return { moved, playerDamageEvents, playerRespawned: false, gameOver: false, respawnReason: null };
+  if (playerHoldingBoulder) {
+    setBoulderHold(
+      levelState,
+      playerHoldingBoulder.startedAt,
+      playerHoldingBoulder.boulder,
+    );
+  } else {
+    clearBoulderHold(levelState);
+  }
+
+  return { moved, playerDamageEvents, playerRespawned: false, gameOver: false, playerCrushSequenceStarted: false, respawnReason: null };
 }
 
 function isMoveComplete(entity, now) {
@@ -457,6 +822,7 @@ function advanceEntityLifecycle(levelState, now) {
       entity.active = false;
       entity.collected = true;
       entity.falling = false;
+      entity.fallStartY = null;
       entity.disappearAfterMove = false;
       result.disappearedAfterMove.push(entity);
     }
@@ -516,10 +882,19 @@ export function createGameSimulation(levelState) {
         lifecycle: null,
         playerRespawned: false,
         gameOver: false,
+        boulderCrushSequence: null,
         respawnReason: null,
       };
 
       result.lifecycle = advanceEntityLifecycle(levelState, now);
+      const crushSequence = advanceBoulderCrushSequence(levelState, now);
+      if (crushSequence) {
+        result.boulderCrushSequence = crushSequence;
+        result.playerRespawned = crushSequence.playerRespawned;
+        result.gameOver = crushSequence.gameOver;
+        result.respawnReason = crushSequence.reason;
+        return result;
+      }
       result.unlockedGemLocks.push(...unlockGemLocks(levelState));
       levelState.player.moving = false;
       levelState.player.pushing = false;
@@ -569,7 +944,7 @@ export function createGameSimulation(levelState) {
             const activatedCheckpoint = activateCheckpoints(target.entities);
             if (activatedCheckpoint)
               saveCheckpointSnapshot(levelState, activatedCheckpoint);
-            result.completedExit = completeExit(levelState, target.entities);
+            result.completedExit = completeExit(levelState, target.entities, now);
             result.moved = true;
           }
         }
@@ -580,10 +955,23 @@ export function createGameSimulation(levelState) {
       const snakes = applySnakes(levelState, now, gravitySkippedEntities);
       result.snakes = snakes.moved;
       for (const event of snakes.playerDamageEvents) {
-        const damage = damagePlayer(levelState, 1, now, event.source);
-        result.playerDamageEvents.push({ ...event, amount: 1, ...damage });
+        const damage = applyDamageEvent(levelState, {
+          ...event,
+          amount: ENEMY_CONTACT_DAMAGE,
+          reason: event.reason || event.source,
+        }, now);
+        result.playerDamageEvents.push(damage);
         result.playerRespawned ||= damage.playerRespawned;
         result.gameOver ||= damage.gameOver;
+        if (damage.deathSequenceStarted) {
+          result.boulderCrushSequence = {
+            active: true,
+            completed: false,
+            reason: damage.reason,
+          };
+          result.respawnReason = damage.reason;
+          return result;
+        }
         if (damage.playerRespawned || damage.gameOver) break;
       }
       if (result.playerRespawned || result.gameOver) {
@@ -591,12 +979,35 @@ export function createGameSimulation(levelState) {
         return result;
       }
       result.fireSpitterEffects = applyFireSpitters(levelState, now);
+      const fireDamage = applyFireEffectDamage(levelState, now);
+      result.playerDamageEvents.push(...fireDamage.playerDamageEvents);
+      result.playerRespawned ||= fireDamage.playerRespawned;
+      result.gameOver ||= fireDamage.gameOver;
+      const fireDeath = fireDamage.playerDamageEvents.find(
+        (event) => event.deathSequenceStarted,
+      );
+      if (fireDeath) {
+        result.boulderCrushSequence = {
+          active: true,
+          completed: false,
+          reason: fireDeath.reason,
+        };
+        result.respawnReason = fireDeath.reason;
+        return result;
+      }
+      if (result.playerRespawned || result.gameOver) {
+        result.respawnReason = result.playerDamageEvents.at(-1)?.reason || null;
+        return result;
+      }
 
       const gravity = applyGravity(levelState, now, gravitySkippedEntities);
       result.falling = gravity.moved;
       result.playerDamageEvents.push(...gravity.playerDamageEvents);
       result.playerRespawned = gravity.playerRespawned;
       result.gameOver = gravity.gameOver;
+      result.boulderCrushSequence = gravity.playerCrushSequenceStarted
+        ? { active: true, completed: false, reason: gravity.respawnReason }
+        : null;
       result.respawnReason = gravity.respawnReason;
 
       return result;

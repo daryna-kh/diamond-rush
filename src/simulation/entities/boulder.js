@@ -12,8 +12,10 @@ import {
   startPendingRoundEntityRoll,
 } from "../simulationGrid.js";
 
-const PLAYER_BOULDER_HOLD_MS = 3000;
+export const PLAYER_BOULDER_HOLD_MS = 2000;
 const BOULDER_FRAME_COUNT = 8;
+const BOULDER_CRUSH_DAMAGE = 2;
+const BOULDER_INSTANT_DEATH_FALL_CELLS = 2;
 
 function advanceBoulderFrameForDx(boulder, dx) {
   if (dx === 0) return;
@@ -29,6 +31,26 @@ function setBoulderMove(boulder, targetX, targetY, now, duration) {
   const dx = targetX - boulder.x;
   advanceBoulderFrameForDx(boulder, dx);
   setEntityMove(boulder, targetX, targetY, now, duration);
+}
+
+function startBoulderFall(boulder) {
+  if (!boulder.falling) {
+    boulder.fallStartY = boulder.y;
+  }
+  boulder.falling = true;
+  boulder.playerSupportStartedAt = null;
+}
+
+function stopBoulderFall(boulder) {
+  boulder.falling = false;
+  boulder.fallStartY = null;
+}
+
+function getBoulderFallCellsToPlayer(boulder, playerY) {
+  const fallStartY = Number.isFinite(boulder.fallStartY)
+    ? boulder.fallStartY
+    : boulder.y;
+  return Math.max(0, playerY - fallStartY);
 }
 
 function isHorizontalPushCellFree(levelState, boulder, x, y) {
@@ -71,6 +93,7 @@ export function applyBoulderPush(levelState, boulder, dx, now) {
 
   boulder.moved = true;
   boulder.playerSupportStartedAt = null;
+  boulder.fallStartY = null;
   clearPendingRoundEntityRoll(boulder);
   setBoulderMove(boulder, target.x, target.y, now);
   return {
@@ -88,17 +111,40 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
   if (isPlayerAt(levelState, targetX, targetY)) {
     clearPendingRoundEntityRoll(boulder);
     if (boulder.falling) {
+      const fallCells = getBoulderFallCellsToPlayer(boulder, targetY);
+      const instantDeath = fallCells >= BOULDER_INSTANT_DEATH_FALL_CELLS;
       boulder.playerSupportStartedAt = null;
-      return { moved: false, entity: boulder, kind: "falling-player-crush", playerRespawn: true };
+      return {
+        moved: false,
+        entity: boulder,
+        kind: "falling-player-crush",
+        playerCrush: true,
+        damageAmount: instantDeath ? null : BOULDER_CRUSH_DAMAGE,
+        instantDeath,
+        fallCells,
+      };
     }
 
     if (!boulder.playerSupportStartedAt) boulder.playerSupportStartedAt = now;
-    boulder.falling = false;
+    stopBoulderFall(boulder);
     if (now - boulder.playerSupportStartedAt >= PLAYER_BOULDER_HOLD_MS) {
       boulder.playerSupportStartedAt = null;
-      return { moved: false, entity: boulder, kind: "player-crush", playerRespawn: true };
+      return {
+        moved: false,
+        entity: boulder,
+        kind: "player-crush",
+        playerCrush: true,
+        damageAmount: BOULDER_CRUSH_DAMAGE,
+        instantDeath: false,
+        fallCells: 0,
+      };
     }
-    return { moved: false, entity: boulder, kind: "player-support" };
+    return {
+      moved: false,
+      entity: boulder,
+      kind: "player-support",
+      playerSupportStartedAt: boulder.playerSupportStartedAt,
+    };
   }
   boulder.playerSupportStartedAt = null;
 
@@ -107,7 +153,7 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
     clearPendingRoundEntityRoll(boulder);
     snake.active = false;
     snake.killed = true;
-    boulder.falling = true;
+    startBoulderFall(boulder);
     setBoulderMove(boulder, targetX, targetY, now, ROUND_ENTITY_FALL_MOVE_MS);
     return { moved: true, entity: boulder, kind: "snake-crush", killed: [snake] };
   }
@@ -116,8 +162,7 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
 
   if (fallTarget.canFall) {
     clearPendingRoundEntityRoll(boulder);
-    boulder.falling = true;
-    boulder.playerSupportStartedAt = null;
+    startBoulderFall(boulder);
     setBoulderMove(boulder, targetX, targetY, now, ROUND_ENTITY_FALL_MOVE_MS);
     return { moved: true, entity: boulder, kind: "fall" };
   }
@@ -128,19 +173,18 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
       if (!isPendingRoundEntityRollTarget(boulder, rollTarget)) {
         startPendingRoundEntityRoll(boulder, rollTarget, now);
       }
-      boulder.falling = false;
+      stopBoulderFall(boulder);
       return { moved: false, entity: boulder, kind: "roll-pending" };
     }
 
     clearPendingRoundEntityRoll(boulder);
-    boulder.falling = true;
-    boulder.playerSupportStartedAt = null;
+    startBoulderFall(boulder);
     advanceBoulderFrameForDx(boulder, rollTarget.x - boulder.x);
     setEntityMove(boulder, rollTarget.x, rollTarget.y, now);
     return { moved: true, entity: boulder, kind: "roll" };
   }
 
   clearPendingRoundEntityRoll(boulder);
-  boulder.falling = false;
+  stopBoulderFall(boulder);
   return { moved: false, entity: boulder, kind: null };
 }

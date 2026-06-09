@@ -16,6 +16,14 @@ const PLAYER_ATLAS = "objects";
 const PLAYER_TEXTURES = new Map();
 const IDLE_ANIMATION_FRAME_MS = 120;
 const INTRO_WALK_FRAME_MS = 120;
+const EXIT_CURTAIN_DURATION_MS = 1000;
+const BOULDER_HOLD_FRAME_MS = 140;
+const BOULDER_CRUSH_FRAME_MS = 140;
+const BOULDER_CRUSH_HOLD_WARNING_MS = 1000;
+const BOULDER_CRUSH_STRUGGLE_MS = 600;
+const BOULDER_HOLD_EARLY_FRAMES = [23, 24];
+const BOULDER_HOLD_LATE_FRAMES = [8, 9];
+const BOULDER_CRUSH_FRAMES = [10, 11, 12, 13];
 
 function frameId(index, prefix = "o.f#0") {
   return `${prefix}:frame:${index}:palette:0`;
@@ -110,6 +118,30 @@ function getSpecialAnimationFrame(player, now) {
   return frame(loopFrameIndexes[loopFrameIndex], { prefix: framePrefix });
 }
 
+function getBoulderHoldFrame(player, now) {
+  if (player.boulderCrush?.active) {
+    const elapsed = Math.max(0, now - player.boulderCrush.startedAt);
+    if (elapsed >= BOULDER_CRUSH_STRUGGLE_MS) return frame(14);
+
+    const frameIndex = Math.min(
+      Math.floor(elapsed / BOULDER_CRUSH_FRAME_MS),
+      BOULDER_CRUSH_FRAMES.length - 1,
+    );
+    return frame(BOULDER_CRUSH_FRAMES[frameIndex]);
+  }
+
+  const hold = player.boulderHold;
+  if (!hold?.active) return null;
+
+  const elapsed = Math.max(0, now - hold.startedAt);
+  const frames =
+    elapsed >= BOULDER_CRUSH_HOLD_WARNING_MS
+      ? BOULDER_HOLD_LATE_FRAMES
+      : BOULDER_HOLD_EARLY_FRAMES;
+  const frameIndex = Math.floor(elapsed / BOULDER_HOLD_FRAME_MS) % frames.length;
+  return frame(frames[frameIndex]);
+}
+
 function getDiamondCollectEffectFrame(player, now) {
   const animation = player.specialAnimation;
   if (!animation?.active || animation.type !== "diamond-collect") return null;
@@ -133,6 +165,9 @@ function getDiamondCollectEffectFrame(player, now) {
 }
 
 function getPlayerFrame(player, now) {
+  const boulderFrame = getBoulderHoldFrame(player, now);
+  if (boulderFrame) return boulderFrame;
+
   const specialFrame = getSpecialAnimationFrame(player, now);
   if (specialFrame) return specialFrame;
 
@@ -165,6 +200,7 @@ function lerp(from, to, progress) {
 
 function updatePlayerRenderPosition(player, now) {
   if (updatePlayerIntro(player, now)) return;
+  if (updatePlayerExitAutoMove(player, now)) return;
 
   const duration = player.moveDuration || 0;
   const hasMove = duration > 0 && player.moveStartedAt > 0;
@@ -212,6 +248,49 @@ function updatePlayerIntro(player, now) {
     player.visualMoving = false;
     player.hidden = false;
     intro.active = false;
+  }
+
+  return true;
+}
+
+function updatePlayerExitAutoMove(player, now) {
+  const exitAutoMove = player.exitAutoMove;
+  if (!exitAutoMove?.active) return false;
+
+  if (!exitAutoMove.moveStartedAt) {
+    exitAutoMove.moveStartedAt = now;
+  }
+
+  const progress = clamp01(
+    (now - exitAutoMove.moveStartedAt) / exitAutoMove.moveDuration,
+  );
+  player.hidden = false;
+  player.direction = exitAutoMove.direction;
+  player.renderX = lerp(exitAutoMove.startX, exitAutoMove.targetX, progress);
+  player.renderY = lerp(exitAutoMove.startY, exitAutoMove.targetY, progress);
+  player.walkFrame = Math.floor(
+    (now - exitAutoMove.moveStartedAt) / INTRO_WALK_FRAME_MS,
+  );
+  player.moving = progress < 1;
+  player.visualMoving = progress < 1;
+
+  if (progress >= 1) {
+    player.x = exitAutoMove.targetX;
+    player.y = exitAutoMove.targetY;
+    player.prevX = exitAutoMove.targetX;
+    player.prevY = exitAutoMove.targetY;
+    player.renderX = exitAutoMove.targetX;
+    player.renderY = exitAutoMove.targetY;
+    player.walkFrame = 0;
+    player.moving = false;
+    player.visualMoving = false;
+    player.hidden = true;
+    player.exitCurtain = {
+      active: true,
+      startedAt: now,
+      duration: EXIT_CURTAIN_DURATION_MS,
+    };
+    exitAutoMove.active = false;
   }
 
   return true;
