@@ -138,6 +138,8 @@ function createEntityState(entity) {
       ...baseEntity,
       checkpointIndex: entity.specifying_data,
       activated: false,
+      doorX: entity.x - 2,
+      doorY: entity.y,
       doorAnimation: { state: "open", startedAt: null },
     };
   }
@@ -264,6 +266,8 @@ function snapshotEntity(entity) {
     rollPendingStartedAt: 0,
     rollPendingDuration: 0,
     doorAnimation: copyClosedDoorAnimation(entity.doorAnimation),
+    doorX: entity.doorX,
+    doorY: entity.doorY,
     playerSupportStartedAt: null,
     snakeAxis: entity.snakeAxis,
     snakeDirection: entity.snakeDirection,

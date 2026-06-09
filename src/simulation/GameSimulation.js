@@ -73,25 +73,44 @@ function isFallingEntity(entity) {
   return entity.type === "diamond" || entity.type === "boulder";
 }
 
+function isPassableEntity(entity) {
+  if (entity.type === "diamond") return true;
+  if (entity.type === "leaf") return true;
+  if (entity.type === "checkpoint") return true;
+  if (entity.type === "chest-brown") return true;
+  if (entity.type === "exit" || entity.type === "secret-exit") return true;
+  if (entity.type === "player-spawn") return true;
+  return false;
+}
+
+function getClosedDoorAt(levelState, x, y) {
+  return levelState.entities.find(
+    (entity) =>
+      entity.type === "player-spawn" &&
+      entity.active &&
+      entity.doorAnimation?.state === "closed" &&
+      entity.doorX === x &&
+      entity.doorY === y,
+  );
+}
+
 function getTargetInfo(levelState, x, y) {
   if (x < 0 || y < 0 || x >= levelState.width || y >= levelState.height) {
     return { passable: false, reason: "bounds", entities: [] };
   }
 
   const entities = getActiveEntitiesAt(levelState, x, y);
+  const closedDoor = getClosedDoorAt(levelState, x, y);
+  if (closedDoor) {
+    return { passable: false, reason: "closed-door", entities };
+  }
+
   if (entities.some((entity) => entity.type === "boulder")) {
     return { passable: false, reason: "boulder", entities };
   }
 
   const blockingEntity = entities.find(
-    (entity) =>
-      entity.type !== "diamond" &&
-      entity.type !== "leaf" &&
-      entity.type !== "checkpoint" &&
-      entity.type !== "chest-brown" &&
-      entity.type !== "player-spawn" &&
-      entity.type !== "exit" &&
-      entity.type !== "secret-exit",
+    (entity) => !isPassableEntity(entity),
   );
   if (blockingEntity)
     return { passable: false, reason: blockingEntity.type, entities };
