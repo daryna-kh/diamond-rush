@@ -47,3 +47,16 @@ export function getDiamondCollectDurationMs(
 ) {
   return DIAMOND_COLLECT_PLAYER_FRAME_INDEXES.length * frameMs;
 }
+
+export const PLAYER_DAMAGE_FRAME_INDEXES = [6, 7, 8, 9];
+export const PLAYER_DAMAGE_FRAME_MS = 120;
+
+export function getPlayerDamageDurationMs(
+  frameMs = PLAYER_DAMAGE_FRAME_MS,
+) {
+  return PLAYER_DAMAGE_FRAME_INDEXES.length * frameMs;
+}
+
+export const PLAYER_FIRE_DAMAGE_FRAME_PREFIX = "o.f#1";
+export const PLAYER_FIRE_DAMAGE_FRAME_INDEXES = [0, 1, 2, 3];
+export const PLAYER_FIRE_DEATH_FRAME_INDEXES = [0, 1, 2, 3, 4, 5];
