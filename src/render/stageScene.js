@@ -1,5 +1,4 @@
 import { Container, Graphics } from "pixi.js";
-import { createDynamicEntityOverlay } from "../dev/dynamicEntityOverlay.js";
 import { createLevelState } from "../game/levelState.js";
 import { createPlayerSprite } from "../game/playerSprite.js";
 import { classifyStage } from "../game/stageClassification.js";
@@ -89,7 +88,11 @@ function syncTopCurtain(stageRoot, now) {
   drawHorizontalCurtain(layer, stageRoot, curtainHeight);
 }
 
-export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}) {
+export function createStageScene(
+  app,
+  assets,
+  { initialWorldId = "angkor", createDynamicEntityOverlay = null } = {},
+) {
   let mode = "game";
   let zoom = 1.5;
   let unknownHighlightEnabled = false;
@@ -144,7 +147,11 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
       levelState.player.sprite = createPlayerSprite(assets, levelState.player);
       entityLayers.actorLayer.addChild(levelState.player.sprite);
     }
-    if (mode === "dev" && dynamicHighlightEnabled) {
+    if (
+      mode === "dev" &&
+      dynamicHighlightEnabled &&
+      createDynamicEntityOverlay
+    ) {
       debugLayer.addChild(createDynamicEntityOverlay(levelState));
     }
 
