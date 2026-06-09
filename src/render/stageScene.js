@@ -1,4 +1,4 @@
-import { Container } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import { createDynamicEntityOverlay } from "../dev/dynamicEntityOverlay.js";
 import { createLevelState } from "../game/levelState.js";
 import { createPlayerSprite } from "../game/playerSprite.js";
@@ -10,6 +10,29 @@ import { renderStage, syncStageAnimations } from "./StageRenderer.js";
 
 function findStage(assets, worldId, stageId) {
   return assets.stages[worldId]?.stages.find((stage) => stage.id === stageId) || null;
+}
+
+function syncBoulderCrushCurtain(stageRoot, now) {
+  const layer = stageRoot?.stageLayers?.crushCurtainLayer;
+  const sequence = stageRoot?.levelState?.player?.boulderCrush;
+  if (!layer) return;
+
+  layer.clear();
+  if (!sequence?.active || now < sequence.curtainStartedAt) return;
+
+  const duration = Math.max(1, sequence.restoreAt - sequence.curtainStartedAt);
+  const progress = Math.max(
+    0,
+    Math.min(1, (now - sequence.curtainStartedAt) / duration),
+  );
+  const width = stageRoot.stagePixelWidth || 0;
+  const height = stageRoot.stagePixelHeight || 0;
+  const curtainHeight = Math.ceil((height / 2) * progress);
+
+  layer
+    .rect(0, 0, width, curtainHeight)
+    .rect(0, height - curtainHeight, width, curtainHeight)
+    .fill({ color: 0x000000, alpha: 1 });
 }
 
 export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}) {
@@ -40,6 +63,7 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     const simulation = createGameSimulation(levelState);
     const nextStageRoot = new Container();
     const debugLayer = new Container();
+    const crushCurtainLayer = new Graphics();
     const staticLayer = renderStage(stage, assets.stageRenderMaps[worldId], assets, {
       highlightUnknown: mode === "dev" && unknownHighlightEnabled,
       skipDynamicEntities: true,
@@ -54,8 +78,9 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
     nextStageRoot.addChild(
       staticLayer,
       entityLayers.itemLayer,
-      entityLayers.actorLayer,
       entityLayers.effectLayer,
+      crushCurtainLayer,
+      entityLayers.actorLayer,
       debugLayer,
     );
 
@@ -76,6 +101,7 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
       itemLayer: entityLayers.itemLayer,
       actorLayer: entityLayers.actorLayer,
       effectLayer: entityLayers.effectLayer,
+      crushCurtainLayer,
       debugLayer,
     };
     nextStageRoot.staticRendererLayers = staticLayer.stageLayers;
@@ -173,17 +199,20 @@ export function createStageScene(app, assets, { initialWorldId = "angkor" } = {}
       if (result.completedExit) {
         syncStageAnimations(stageRoot.stageLayers.staticLayer, assets, now);
         syncLevelStateSprites(assets, stageRoot.levelState, now);
+        syncBoulderCrushCurtain(stageRoot, now);
         emitSceneChange();
         return result;
       }
       syncStageAnimations(stageRoot.stageLayers.staticLayer, assets, now);
       syncLevelStateSprites(assets, stageRoot.levelState, now);
+      syncBoulderCrushCurtain(stageRoot, now);
       emitSceneChange();
       return result;
     },
     update(now = Date.now()) {
       syncStageAnimations(stageRoot.stageLayers.staticLayer, assets, now);
       syncLevelStateSprites(assets, stageRoot.levelState, now);
+      syncBoulderCrushCurtain(stageRoot, now);
     },
   };
 

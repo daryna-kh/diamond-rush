@@ -12,7 +12,7 @@ import {
   startPendingRoundEntityRoll,
 } from "../simulationGrid.js";
 
-const PLAYER_BOULDER_HOLD_MS = 3000;
+export const PLAYER_BOULDER_HOLD_MS = 2000;
 const BOULDER_FRAME_COUNT = 8;
 
 function advanceBoulderFrameForDx(boulder, dx) {
@@ -89,16 +89,21 @@ export function applyBoulderGravity(levelState, boulder, now, helpers) {
     clearPendingRoundEntityRoll(boulder);
     if (boulder.falling) {
       boulder.playerSupportStartedAt = null;
-      return { moved: false, entity: boulder, kind: "falling-player-crush", playerRespawn: true };
+      return { moved: false, entity: boulder, kind: "falling-player-crush", playerCrush: true };
     }
 
     if (!boulder.playerSupportStartedAt) boulder.playerSupportStartedAt = now;
     boulder.falling = false;
     if (now - boulder.playerSupportStartedAt >= PLAYER_BOULDER_HOLD_MS) {
       boulder.playerSupportStartedAt = null;
-      return { moved: false, entity: boulder, kind: "player-crush", playerRespawn: true };
+      return { moved: false, entity: boulder, kind: "player-crush", playerCrush: true };
     }
-    return { moved: false, entity: boulder, kind: "player-support" };
+    return {
+      moved: false,
+      entity: boulder,
+      kind: "player-support",
+      playerSupportStartedAt: boulder.playerSupportStartedAt,
+    };
   }
   boulder.playerSupportStartedAt = null;
 

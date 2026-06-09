@@ -23,6 +23,7 @@ const DIAMOND_FRAME_COUNT = 4;
 const DIAMOND_FRAME_PREFIX = "cm.f#2";
 const DIAMOND_PAUSE_MS = 1000;
 const BOULDER_FRAME_PREFIX = "0.f#0";
+const BOULDER_CRUSH_DROP_MS = 600;
 const ROLL_PENDING_WOBBLE_CYCLES = 5;
 const ROLL_PENDING_WOBBLE_X = 0.08;
 const ROLL_PENDING_WOBBLE_Y = 0.025;
@@ -463,13 +464,25 @@ function syncBoulderSprite(assets, entity, sprite, now) {
     sprite.entityAnimatedFrameId = frameId;
   }
 
-  const { x, y } = getEntityRenderPosition(entity, now);
+  const crush = entity.levelState?.player?.boulderCrush;
+  const crushingPlayer = crush?.active && crush.boulderId === entity.id;
+  const { x, y } = crushingPlayer
+    ? getBoulderCrushRenderPosition(entity, entity.levelState.player, crush, now)
+    : getEntityRenderPosition(entity, now);
   sprite.scale.x = 1;
   sprite.scale.y = 1;
   sprite.x = x * TILE_SIZE + draw.dx;
   sprite.y = y * TILE_SIZE + draw.dy;
   sprite.visible = entity.active;
   return true;
+}
+
+function getBoulderCrushRenderPosition(entity, player, crush, now) {
+  const progress = clamp01((now - crush.startedAt) / BOULDER_CRUSH_DROP_MS);
+  return {
+    x: lerp(entity.x, player.x, progress),
+    y: lerp(entity.y, player.y, progress),
+  };
 }
 
 function getDiamondFrameId(draw, now) {
@@ -550,6 +563,7 @@ export function createEntityLayers(assets, levelState) {
 
 export function syncLevelStateSprites(assets, levelState, now = Date.now()) {
   for (const entity of levelState.entities) {
+    entity.levelState = levelState;
     const visible = entity.active && !entity.collected;
     for (const sprite of entity.sprites) {
       if (syncDoorSprite(assets, entity, sprite, now)) {
