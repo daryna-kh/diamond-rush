@@ -36,13 +36,57 @@
   bottom: 58px;
   transform: translateX(-50%);
   z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
   border: 1px solid rgba(232, 240, 242, 0.28);
   border-radius: 6px;
   background: rgba(17, 23, 25, 0.88);
   color: #e8f0f2;
-  font: 14px Arial, sans-serif;
-  padding: 8px 12px;
+  font: 700 14px Arial, sans-serif;
+  padding: 7px 10px;
   white-space: nowrap;
+}
+
+.game-hud__group {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+}
+
+.game-hud__health {
+  gap: 0;
+  min-width: 30px;
+  min-height: 21px;
+}
+
+.game-hud__health .game-hud__icon {
+  margin: 0;
+}
+
+.game-hud__lives,
+.game-hud__diamonds,
+.game-hud__required {
+  gap: 5px;
+}
+
+.game-hud__icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+}
+
+.game-hud__value {
+  min-width: 18px;
+  text-align: left;
+}
+
+.game-hud__game-over {
+  border-left: 1px solid rgba(232, 240, 242, 0.24);
+  color: #ff6f5e;
+  padding-left: 10px;
 }
 
 .dev-picker {
