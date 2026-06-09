@@ -65,10 +65,30 @@
   margin: 0;
 }
 
-.game-hud__lives,
-.game-hud__diamonds,
-.game-hud__required {
+.game-hud__lives {
   gap: 5px;
+}
+
+.game-hud__gem-counter {
+  min-width: 37px;
+}
+
+.game-hud__gem-lock-counter {
+  min-width: 19px;
+}
+
+.game-hud__gem-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 37px;
+  height: 25px;
+}
+
+.game-hud__lock-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 19px;
+  height: 24px;
 }
 
 .game-hud__icon {
@@ -78,9 +98,34 @@
   background-repeat: no-repeat;
 }
 
-.game-hud__value {
-  min-width: 18px;
-  text-align: left;
+.game-hud__sprite-number {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0;
+  min-height: 9px;
+}
+
+.game-hud__gem-value {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  justify-content: flex-end;
+  max-width: 46px;
+}
+
+.game-hud__lock-value {
+  position: absolute;
+  right: 1px;
+  bottom: 2px;
+  justify-content: flex-end;
+  max-width: 28px;
+}
+
+.game-hud__digit {
+  display: inline-block;
+  flex: 0 0 auto;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
 }
 
 .game-hud__game-over {

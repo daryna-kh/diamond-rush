@@ -2,6 +2,27 @@ function copyDraw(draw) {
   return { ...draw };
 }
 
+function hasDrawAsset(entity, asset) {
+  return entity.draws?.some((draw) => draw.asset === asset);
+}
+
+function getGemKind(entity) {
+  if (hasDrawAsset(entity, "gem-red")) return "red";
+  if (hasDrawAsset(entity, "gem-violet")) return "violet";
+  return "violet";
+}
+
+function getGemValue(entity) {
+  if (entity.type === "diamond") return 1;
+  if (entity.type !== "chest-brown") return 0;
+  if (entity.blocks === 41) return Number.isFinite(entity.specifying_data)
+    ? entity.specifying_data
+    : 0;
+  if (entity.blocks === 7) return 10;
+  if (entity.blocks === 2) return 1;
+  return 0;
+}
+
 const INTRO_PASSAGE_KEYS = new Set(["225/225/225", "255/255/255"]);
 const INTRO_TILE_DURATION = 250;
 const INITIAL_PLAYER_HEALTH = 4;
@@ -66,6 +87,7 @@ function createEntityState(entity) {
   if (entity.type === "diamond") {
     return {
       ...baseEntity,
+      gemKind: getGemKind(entity),
       collected: false,
       falling: false,
       fallStartY: null,
@@ -103,6 +125,8 @@ function createEntityState(entity) {
   if (entity.type === "chest-brown") {
     return {
       ...baseEntity,
+      gemKind: getGemKind(entity),
+      gemValue: getGemValue(entity),
       contentBlock: entity.blocks,
       opened: false,
       opening: false,
@@ -275,6 +299,8 @@ function snapshotEntity(entity) {
     doorX: entity.doorX,
     doorY: entity.doorY,
     playerSupportStartedAt: null,
+    gemKind: entity.gemKind,
+    gemValue: entity.gemValue,
     snakeAxis: entity.snakeAxis,
     snakeDirection: entity.snakeDirection,
     fireDirectionX: entity.fireDirectionX,
@@ -332,6 +358,7 @@ export function saveCheckpointSnapshot(levelState, checkpoint) {
       levelState.entities.map((entity) => [entity.id, snapshotEntity(entity)]),
     ),
     collectedDiamonds: levelState.collectedDiamonds,
+    collectedGems: { ...levelState.collectedGems },
   };
 }
 
@@ -345,8 +372,21 @@ export function restoreCheckpointSnapshot(levelState) {
     if (entitySnapshot) restoreEntity(entity, entitySnapshot);
   }
   levelState.collectedDiamonds = snapshot.collectedDiamonds;
+  levelState.collectedGems = { ...snapshot.collectedGems };
   for (const effect of levelState.effects) effect.active = false;
   return true;
+}
+
+function getGemTotals(entities) {
+  return entities.reduce(
+    (totals, entity) => {
+      const value = getGemValue(entity);
+      if (value <= 0) return totals;
+      totals[getGemKind(entity)] += value;
+      return totals;
+    },
+    { violet: 0, red: 0 },
+  );
 }
 
 export function createLevelState(stage, classification) {
@@ -391,6 +431,8 @@ export function createLevelState(stage, classification) {
     ),
     effects: [],
     collectedDiamonds: 0,
+    collectedGems: { violet: 0, red: 0 },
+    totalGems: getGemTotals(entities),
     completedExit: null,
     completedStage: false,
     activeCheckpointId: null,
