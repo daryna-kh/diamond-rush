@@ -16,6 +16,7 @@ const PLAYER_ATLAS = "objects";
 const PLAYER_TEXTURES = new Map();
 const IDLE_ANIMATION_FRAME_MS = 120;
 const INTRO_WALK_FRAME_MS = 120;
+const EXIT_CURTAIN_DURATION_MS = 1000;
 const BOULDER_HOLD_FRAME_MS = 140;
 const BOULDER_CRUSH_FRAME_MS = 140;
 const BOULDER_CRUSH_HOLD_WARNING_MS = 1000;
@@ -199,6 +200,7 @@ function lerp(from, to, progress) {
 
 function updatePlayerRenderPosition(player, now) {
   if (updatePlayerIntro(player, now)) return;
+  if (updatePlayerExitAutoMove(player, now)) return;
 
   const duration = player.moveDuration || 0;
   const hasMove = duration > 0 && player.moveStartedAt > 0;
@@ -246,6 +248,49 @@ function updatePlayerIntro(player, now) {
     player.visualMoving = false;
     player.hidden = false;
     intro.active = false;
+  }
+
+  return true;
+}
+
+function updatePlayerExitAutoMove(player, now) {
+  const exitAutoMove = player.exitAutoMove;
+  if (!exitAutoMove?.active) return false;
+
+  if (!exitAutoMove.moveStartedAt) {
+    exitAutoMove.moveStartedAt = now;
+  }
+
+  const progress = clamp01(
+    (now - exitAutoMove.moveStartedAt) / exitAutoMove.moveDuration,
+  );
+  player.hidden = false;
+  player.direction = exitAutoMove.direction;
+  player.renderX = lerp(exitAutoMove.startX, exitAutoMove.targetX, progress);
+  player.renderY = lerp(exitAutoMove.startY, exitAutoMove.targetY, progress);
+  player.walkFrame = Math.floor(
+    (now - exitAutoMove.moveStartedAt) / INTRO_WALK_FRAME_MS,
+  );
+  player.moving = progress < 1;
+  player.visualMoving = progress < 1;
+
+  if (progress >= 1) {
+    player.x = exitAutoMove.targetX;
+    player.y = exitAutoMove.targetY;
+    player.prevX = exitAutoMove.targetX;
+    player.prevY = exitAutoMove.targetY;
+    player.renderX = exitAutoMove.targetX;
+    player.renderY = exitAutoMove.targetY;
+    player.walkFrame = 0;
+    player.moving = false;
+    player.visualMoving = false;
+    player.hidden = true;
+    player.exitCurtain = {
+      active: true,
+      startedAt: now,
+      duration: EXIT_CURTAIN_DURATION_MS,
+    };
+    exitAutoMove.active = false;
   }
 
   return true;

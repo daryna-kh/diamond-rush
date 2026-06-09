@@ -156,7 +156,68 @@ function unlockGemLocks(levelState) {
   return unlocked;
 }
 
-function completeExit(levelState, entities) {
+function isExitAutoMoveFreeCell(levelState, x, y) {
+  const target = getTargetInfo(levelState, x, y);
+  if (!target.passable) return false;
+
+  return target.entities.every(
+    (entity) =>
+      entity.type === "checkpoint" ||
+      entity.type === "player-spawn" ||
+      entity.type === "exit" ||
+      entity.type === "secret-exit",
+  );
+}
+
+function getExitAutoMoveTarget(levelState, direction) {
+  const vector = DIRECTIONS[direction] || DIRECTIONS.down;
+  let targetX = levelState.player.x;
+  let targetY = levelState.player.y;
+
+  while (
+    isExitAutoMoveFreeCell(
+      levelState,
+      targetX + vector.dx,
+      targetY + vector.dy,
+    )
+  ) {
+    targetX += vector.dx;
+    targetY += vector.dy;
+  }
+
+  return { x: targetX, y: targetY };
+}
+
+function startExitAutoMove(levelState, now) {
+  const player = levelState.player;
+  const direction = player.direction || "down";
+  const target = getExitAutoMoveTarget(levelState, direction);
+  const continueCurrentStep = player.moveStartedAt === now;
+  const startX = continueCurrentStep ? player.prevX : player.x;
+  const startY = continueCurrentStep ? player.prevY : player.y;
+  const distance = Math.max(
+    1,
+    Math.abs(target.x - startX) + Math.abs(target.y - startY),
+  );
+
+  player.exitAutoMove = {
+    active: true,
+    direction,
+    startX,
+    startY,
+    targetX: target.x,
+    targetY: target.y,
+    moveStartedAt: now,
+    moveDuration: distance * TICK_MS,
+  };
+  player.direction = direction;
+  player.walkFrame = 0;
+  player.moving = true;
+  player.visualMoving = true;
+  player.pushing = false;
+}
+
+function completeExit(levelState, entities, now) {
   if (levelState.completedStage) return null;
   const exit = entities.find(
     (entity) =>
@@ -172,6 +233,7 @@ function completeExit(levelState, entities) {
     y: exit.y,
     secret: exit.type === "secret-exit",
   };
+  startExitAutoMove(levelState, now);
   return exit;
 }
 
@@ -675,7 +737,7 @@ export function createGameSimulation(levelState) {
             const activatedCheckpoint = activateCheckpoints(target.entities);
             if (activatedCheckpoint)
               saveCheckpointSnapshot(levelState, activatedCheckpoint);
-            result.completedExit = completeExit(levelState, target.entities);
+            result.completedExit = completeExit(levelState, target.entities, now);
             result.moved = true;
           }
         }
