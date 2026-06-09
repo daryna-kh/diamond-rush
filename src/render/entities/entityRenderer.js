@@ -18,6 +18,8 @@ const CHECKPOINT_FRAME_MS = 120;
 const CHECKPOINT_FRAME_COUNT = 8;
 const CHECKPOINT_FRAME_PREFIX = "cm.f#6";
 const CHECKPOINT_IDLE_FRAME_ID = `${CHECKPOINT_FRAME_PREFIX}:frame:0:palette:0`;
+const GEM_LOCK_FRAME_ID = "cm.f#5:frame:0:palette:0";
+const HUD_DIGIT_FRAME_PREFIX = "ui.f#2";
 const DIAMOND_FRAME_MS = 120;
 const DIAMOND_FRAME_COUNT = 4;
 const DIAMOND_FRAME_PREFIX = "cm.f#2";
@@ -75,6 +77,43 @@ function createAtlasFrameTexture(assets, atlasId, frameId, textureCache) {
 
   textureCache.set(cacheKey, texture);
   return texture;
+}
+
+function addGemLockRequirementDigits(sprite, assets, requiredDiamonds, textureCache) {
+  const text = String(Math.max(0, Number(requiredDiamonds) || 0));
+  const digitSprites = [];
+  let totalWidth = 0;
+  let maxHeight = 0;
+
+  for (const char of text) {
+    const texture = createAtlasFrameTexture(
+      assets,
+      "ui",
+      `${HUD_DIGIT_FRAME_PREFIX}:module:${char}:palette:0`,
+      textureCache,
+    );
+    if (!texture) continue;
+
+    const digit = new Sprite({ texture, roundPixels: true });
+    digit.label = `gem-lock-required:${char}`;
+    digitSprites.push(digit);
+    totalWidth += texture.width;
+    maxHeight = Math.max(maxHeight, texture.height);
+  }
+
+  if (!digitSprites.length) return;
+
+  const iconWidth = sprite.texture?.width || TILE_SIZE;
+  const iconHeight = sprite.texture?.height || TILE_SIZE;
+  let offsetX = Math.max(0, iconWidth - totalWidth - 1);
+  const offsetY = Math.max(0, iconHeight - maxHeight - 2);
+
+  for (const digit of digitSprites) {
+    digit.x = offsetX;
+    digit.y = offsetY;
+    offsetX += digit.texture.width;
+    sprite.addChild(digit);
+  }
 }
 
 function getLeafAnimationFrameId(draw, frameIndex) {
@@ -149,6 +188,14 @@ function addEntityDraw(container, assets, entity, draw, textureCache) {
   sprite.label = `${entity.id}:${draw.asset}`;
   sprite.entityDraw = draw;
   sprite.entityTextureCache = textureCache;
+  if (entity.type === "gem-lock" && draw.frameId === GEM_LOCK_FRAME_ID) {
+    addGemLockRequirementDigits(
+      sprite,
+      assets,
+      entity.requiredDiamonds,
+      textureCache,
+    );
+  }
   container.addChild(sprite);
   entity.sprites.push(sprite);
   if (!entity.sprite) entity.sprite = sprite;

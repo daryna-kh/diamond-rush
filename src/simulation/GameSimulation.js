@@ -139,6 +139,7 @@ function collectDiamonds(levelState, entities, now) {
     entity.collected = true;
     entity.active = false;
     levelState.collectedDiamonds += 1;
+    levelState.collectedGems[entity.gemKind || "violet"] += 1;
     collected.push(entity);
   }
   if (collected.length > 0) {
@@ -557,6 +558,11 @@ function startDiamondCollectAnimation(player, now) {
 }
 
 function applyChestReward(levelState, chest) {
+  if (chest.contentBlock === 2) {
+    levelState.collectedGems.red += 1;
+    return { type: "red-diamond", amount: 1, chest };
+  }
+
   if (chest.contentBlock === 6) {
     levelState.player.lives += 1;
     return { type: "one-up", amount: 1, chest };
@@ -570,6 +576,7 @@ function applyChestReward(levelState, chest) {
     }
 
     levelState.collectedDiamonds += 10;
+    levelState.collectedGems.violet += 10;
     return { type: "diamond", amount: 10, chest };
   }
 
@@ -578,6 +585,7 @@ function applyChestReward(levelState, chest) {
       ? chest.specifying_data
       : 0;
     levelState.collectedDiamonds += amount;
+    levelState.collectedGems.violet += amount;
     return { type: "diamond", amount, chest };
   }
 

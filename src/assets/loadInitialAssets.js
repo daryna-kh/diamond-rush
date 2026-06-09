@@ -17,9 +17,19 @@ function publicAssetUrl(path) {
 }
 
 export async function loadInitialAssets() {
-  const objectsTexture = await Assets.load(publicAssetUrl("assets/atlases/objects.png"));
-  const objectsAtlas = await loadJson(publicAssetUrl("assets/atlases/objects.json"));
-  const stageMetadata = await loadJson(publicAssetUrl("assets/data/stage-metadata.json"));
+  const [
+    objectsTexture,
+    objectsAtlas,
+    uiTexture,
+    uiAtlas,
+    stageMetadata,
+  ] = await Promise.all([
+    Assets.load(publicAssetUrl("assets/atlases/objects.png")),
+    loadJson(publicAssetUrl("assets/atlases/objects.json")),
+    Assets.load(publicAssetUrl("assets/atlases/ui.png")),
+    loadJson(publicAssetUrl("assets/atlases/ui.json")),
+    loadJson(publicAssetUrl("assets/data/stage-metadata.json")),
+  ]);
 
   const worldAssets = await Promise.all(
     worlds.map(async (world) => {
@@ -34,8 +44,8 @@ export async function loadInitialAssets() {
     }),
   );
 
-  const textures = { objects: objectsTexture };
-  const atlases = { objects: objectsAtlas };
+  const textures = { objects: objectsTexture, ui: uiTexture };
+  const atlases = { objects: objectsAtlas, ui: uiAtlas };
   const stagesByWorld = {};
   const stageRenderMaps = {};
 
